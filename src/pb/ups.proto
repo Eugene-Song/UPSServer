@@ -63,7 +63,7 @@ message UQuery{
 }
 
 message UTruck{
-  required int32 truckid =1;
+  required int32 truckid = 1;
   required string status = 2;
   required int32 x = 3;
   required int32 y = 4;

@@ -8,7 +8,7 @@ const dbConfig = {
     database: 'upsdb'
 };
 
-const sampleUserRecords1 = 'INSERT INTO users (username, password) VALUES (\'Yuxin\', \'ABC1234567\')';
+const sampleUserRecords1 = 'INSERT INTO users (username, password) VALUES (\'Yuxin\', \'$2a$10$SZqPcbLFSM60JSlS6SGD4OAIT0F2v22VGo/P81JrnHDCEaaWzJFv2\')';
 const sampleRecords1 = 'INSERT INTO package (status, tracking_number, date, targetaddr, user_id) VALUES (\'In Transit\', \'ABC1234567\', \'2023-04-01\', \'123 Main St, New York, NY 10001\', 1)';
 const sampleRecords2 = 'INSERT INTO package (status, tracking_number, date, targetaddr, user_id) VALUES (\'Delivered\', \'DEF1234567\', \'2023-03-15\', \'456 Elm St, Los Angeles, CA 90001\', 1)';
 const sampleRecords3 = 'INSERT INTO package (status, tracking_number, date, targetaddr, user_id) VALUES (\'Returned\', \'GHI1234567\', \'2023-04-10\', \'789 Oak St, Chicago, IL 60601\', 1)';

@@ -33,6 +33,7 @@ const logger = pino({
     target: 'pino-pretty'
   }
 })
+
 app.use(expressPinoLogger({ logger }))
 app.use(session({
   // some seceret?
@@ -121,18 +122,14 @@ app.get('/logout', (req, res, next) => {
 app.get('/', (req, res) => {
   if (req.isAuthenticated()) {
     res.send(`Welcome, ${req.user.username}! <a href="/logout">Logout</a>`);
+    // add some button to go to the tracking page
+
   } else {
     res.send('Please <a href="/login">log in</a> or <a href="/register">register</a> to access this page.');
+    // TODO: use tracking number search for packages
+
   }
 });
-
-// // Middleware to check if the user is authenticated
-// function ensureAuthenticated(req, res, next) {
-//   if (req.isAuthenticated()) {
-//     return next();
-//   }
-//   res.redirect('/login');
-// }
 
 // Example of a protected route
 app.get('/protected', checkAuthenticated, (req, res) => {

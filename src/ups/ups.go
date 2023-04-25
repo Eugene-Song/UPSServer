@@ -162,8 +162,29 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 }
 
 // handle truck status queris
-func (u *UPS) HandleTruckStatus(truckStatus []*pb.UTruck, connW net.Conn) {
-	
+func (u *UPS) HandleTruckStatus(truckStatuses []*pb.UTruck, connW net.Conn) {
+
+	for _, truckStatus := range truckStatuses {
+		truckID := truckStatus.GetTruckid()
+		truckX := truckStatus.GetX()
+		truckY := truckStatus.GetY()
+
+		u.PackageMutex.Lock()
+		for _, v := range u.Package {
+			if v.truckId == truckID && v.status == "out for delivery" {
+				v.currX = truckX
+				v.currY = truckY
+			}
+		}
+		u.PackageMutex.Unlock()
+	}
+
+	// Send World ACKS
+	acks := make([]int64, len(truckStatuses))
+	for i, each := range truckStatuses {
+		acks[i] = *each.Seqnum
+	}
+	sendWorldACK(acks, connW)
 }
 
 // function to delete acked command

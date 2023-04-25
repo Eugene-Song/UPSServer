@@ -33,12 +33,13 @@ func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
 
 	packageID := packageMetaData.packageId
 	status := packageMetaData.status
-
+	currentX := packageMetaData.currX
+	currentY := packageMetaData.currY
 	username := packageMetaData.username
 	destinationX := packageMetaData.destX
 	destinationY := packageMetaData.destY
 
-	result, err := db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username, date)
+	result, err := db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,6 +49,6 @@ func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Successfully inserted or updated row with ID %d. Rows affected: %d\n", id, affectedRows)
+	fmt.Printf("Successfully inserted or updated row with ID %d. Rows affected: %d\n", packageID, affectedRows)
 
 }

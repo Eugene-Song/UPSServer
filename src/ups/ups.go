@@ -161,6 +161,11 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 	sendWorldACK(acks, connW)
 }
 
+// handle truck status queris
+func (u *UPS) HandleTruckStatus(truckStatus []*pb.UTruck, connW net.Conn) {
+	
+}
+
 // function to delete acked command
 func (u *UPS) DeleteAckedCommand(acks []int64) {
 	for _, ack := range acks {

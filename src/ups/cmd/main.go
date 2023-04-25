@@ -130,8 +130,11 @@ func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 			ups.HandleUDeliverMade(delivered, connA, connW)
 		}
 
-		//
-
+		//5. handle truckstatus
+		truckStatus := uResponses.Truckstatus
+		if truckStatus != nil {
+			ups.HandleTruckStatus(truckStatus, connW)
+		}
 	}
 }
 

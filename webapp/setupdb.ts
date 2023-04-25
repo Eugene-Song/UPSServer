@@ -23,19 +23,21 @@ const createUserTableQuery = `
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(255),
-    email VARCHAR(255)UNIQUE,
+    email VARCHAR(255) UNIQUE,
     password VARCHAR(255) NOT NULL
   );
 `;
 const createPackageTableQuery = `
   CREATE TABLE package (
-    packageid INT AUTO_INCREMENT PRIMARY KEY,
-    status ENUM('In Transit', 'Delivered', 'Returned', 'Cancelled') NOT NULL,
-    tracking_number VARCHAR(255) NOT NULL UNIQUE,
-    date DATE NOT NULL,
-    targetaddr VARCHAR(255) NOT NULL,
-    user_id INT,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    packageID BIGINT PRIMARY KEY,
+    status VARCHAR(255) NOT NULL,
+    currentX INT,
+    currentY INT,
+    destinationX INT,
+    destinationY INT,
+    username VARCHAR(255),
+    FOREIGN KEY (username) REFERENCES users(username)
+    date DATETIME NOT NULL,
   );
 `;
 // SQL statements to drop existing tables

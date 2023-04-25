@@ -25,6 +25,14 @@ type PackageMetaData struct {
 	pickupX int32
 	// pickup coordinate y
 	pickupY int32
+	// username
+	username string
+	// Status
+	status string
+	// current X
+	currX int32
+	// current Y
+	currY int32
 }
 
 // used for encode after marshal
@@ -55,7 +63,7 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 	log.Printf("Find a truck %d", truckId)
 	// construct UCommands
 	for _, pickUpRequest := range pickUpRequests {
-		seqNum := randomInt64()
+		seqNum := RandomInt64()
 		uGoPickup := &pb.UGoPickup{
 			Truckid: &truckId,
 			Whid:    pickUpRequest.WarehouseId,
@@ -73,10 +81,16 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 			truckId:   truckId,
 			pickupX:   *pickUpRequest.X,
 			pickupY:   *pickUpRequest.Y,
+			username:  *pickUpRequest.UpsName,
+			status:    "truck en route to warehouse",
+			currX:     *pickUpRequest.X,
+			currY:     *pickUpRequest.Y,
 		}
 		u.PackageMutex.Lock()
 		u.Package[*pickUpRequest.ShipId] = packageMeta
 		u.PackageMutex.Unlock()
+
+		u.updatePackageTable(packageMeta)
 
 		u.MapTruckShipMutex.Lock()
 		shipIds, ok := u.MapTruckShip[truckId]
@@ -109,15 +123,18 @@ func (u *UPS) ConstructUCommandsDeliver(deliverRequests []*pb.AUDeliverRequest) 
 	u.TruckMutex.Unlock()
 
 	// construct UCommands
-	seqNum := randomInt64()
+	seqNum := RandomInt64()
 	uGoDeliver := &pb.UGoDeliver{
 		Truckid:  &truckId,
 		Packages: []*pb.UDeliveryLocation{},
 		Seqnum:   &(seqNum),
 	}
+
+	u.PackageMutex.Lock()
 	for _, deliverRequest := range deliverRequests {
 		shipID := *deliverRequest.ShipId
 		packageData := u.Package[shipID]
+
 		uDeliverLocation := &pb.UDeliveryLocation{
 			Packageid: &shipID,
 			X:         &packageData.destX,
@@ -125,7 +142,11 @@ func (u *UPS) ConstructUCommandsDeliver(deliverRequests []*pb.AUDeliverRequest) 
 		}
 		uGoDeliver.Packages = append(uGoDeliver.Packages, uDeliverLocation)
 
+		// update package status
+		packageData.status = "out for delivery"
 	}
+	u.PackageMutex.Unlock()
+
 	u.UnAckedDeliver[seqNum] = uGoDeliver
 
 	return ucommands
@@ -169,7 +190,7 @@ func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
 	}
 
 	for _, shipId := range shipIds {
-		seqNum := randomInt64()
+		seqNum := RandomInt64()
 		uaLoadRequest := &pb.UALoadRequest{
 			SeqNum:  &seqNum,
 			TruckId: &truckId,
@@ -188,9 +209,19 @@ func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
 }
 
 // Helper functions
-func randomInt64() int64 {
+func RandomInt64() int64 {
 	var randomInt64 int64
 	_ = binary.Read(rand.Reader, binary.LittleEndian, &randomInt64)
 	fmt.Println("Generated random int64:", randomInt64)
 	return randomInt64
+}
+
+func (u *UPS) updatePackLoadStatus(shipIds []int64) {
+	u.PackageMutex.Lock()
+	for _, shipId := range shipIds {
+		packageMeta := u.Package[shipId]
+		packageMeta.status = "truck waiting for package"
+	}
+	u.PackageMutex.Unlock()
+
 }

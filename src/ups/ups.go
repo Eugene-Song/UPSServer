@@ -2,6 +2,7 @@ package ups
 
 import (
 	pb "UPSServer/pb"
+	"database/sql"
 	"github.com/golang/protobuf/proto"
 	"log"
 	"net"
@@ -29,6 +30,8 @@ type UPS struct {
 	// mapping between seqNum and shipId for pickUpCommand
 	MapTruckShip      map[int32][]int64
 	MapTruckShipMutex sync.Mutex
+
+	DB *sql.DB
 }
 
 func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW net.Conn, connA net.Conn) {
@@ -101,6 +104,10 @@ func (u *UPS) HandleUFinished(uFinishedResponses []*pb.UFinished, connA net.Conn
 			shipIds = u.MapTruckShip[truckId]
 			u.MapTruckShip[truckId] = []int64{}
 			u.Truck[truckId] = "arrive warehouse"
+
+			// change status for all the packages or shipids
+			u.updatePackLoadStatus(shipIds)
+
 			sendAmazonLoadReq(shipIds, truckId, connA)
 		} else {
 			continue
@@ -123,13 +130,16 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 		Delivered: []*pb.UADelivered{},
 	}
 	for _, uDeliverMadeResponse := range uDeliverMadeResponses {
-		seqNum := randomInt64()
+		seqNum := RandomInt64()
 		shipId := *uDeliverMadeResponse.Packageid
 		uaDelivered := &pb.UADelivered{
 			SeqNum: &seqNum,
 			ShipId: &shipId,
 		}
 		uaCommand.Delivered = append(uaCommand.Delivered, uaDelivered)
+
+		// change status for the packages status to delivered
+		u.Package[shipId].status = "delivered"
 	}
 
 	// send delivered to Amazon

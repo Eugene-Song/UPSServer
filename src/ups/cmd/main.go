@@ -4,6 +4,7 @@ import (
 	pb "UPSServer/pb"
 	ua "UPSServer/pb"
 	"UPSServer/ups"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"github.com/golang/protobuf/proto"
@@ -13,237 +14,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
-//func main() {
-//	// Construct the UConnect message
-//	var i int32 = 1
-//	var x int32 = 0
-//	var y int32 = 0
-//	truck := &pb.UInitTruck{
-//		Id: &i,
-//		X:  &x,
-//		Y:  &y,
-//	}
-//
-//	var i2 int32 = 2
-//	var x2 int32 = 0
-//	var y2 int32 = 0
-//	truck2 := &pb.UInitTruck{
-//		Id: &i2,
-//		X:  &x2,
-//		Y:  &y2,
-//	}
-//
-//	isAmazon := false
-//	connect := &pb.UConnect{
-//		Trucks:   []*pb.UInitTruck{truck, truck2},
-//		IsAmazon: &isAmazon,
-//	}
-//
-//	// Serialize the UConnect message
-//	marshaledBytes, err := proto.Marshal(connect)
-//	if err != nil {
-//		log.Fatalf("Failed to marshal UConnect message: %v", err)
-//	}
-//
-//	// Encode the length of the message as a varint and prepend it to the message
-//	connectBytes := prefixVarintLength(marshaledBytes)
-//
-//	// Connect to the server
-//	conn, err := net.Dial("tcp", "vcm-32169.vm.duke.edu:12345")
-//	if err != nil {
-//		log.Fatalf("Failed to connect to server: %v", err)
-//	}
-//	defer conn.Close()
-//
-//	// Send the UConnect message
-//	_, err = conn.Write(connectBytes)
-//	if err != nil {
-//		log.Fatalf("Failed to send UConnect message: %v", err)
-//	}
-//
-//	_, err = conn.Write(connectBytes)
-//	if err != nil {
-//		log.Fatalf("Failed to send UConnect message: %v", err)
-//	}
-//
-//	fmt.Println("Starting...")
-//	time.Sleep(5 * time.Second) // Sleep for 3 seconds
-//	fmt.Println("...Finished")
-//
-//	//// Read the response
-//	//buf := make([]byte, 1024)
-//	//n, err := conn.Read(buf)
-//	//if err != nil {
-//	//	log.Fatalf("Failed to read response: %v", err)
-//	//}
-//
-//	decodedBytes, err := decodeVarintPrefixed(conn)
-//	// Unmarshal the UConnected message from the response
-//	connected := &pb.UConnected{}
-//	err = proto.Unmarshal(decodedBytes, connected)
-//
-//	log.Printf("Received UConnected message: %v", connected)
-//	//log.Printf(string(buf))
-//	if err != nil {
-//		log.Fatalf("Failed to unmarshal UConnected message: %v", err)
-//	}
-//}
-//
-//// used for encode after marshal
-//func prefixVarintLength(data []byte) []byte {
-//	messageLen := uint64(len(data))
-//	varintBytes := make([]byte, binary.MaxVarintLen64)
-//	varintLen := binary.PutUvarint(varintBytes, messageLen)
-//	return append(varintBytes[:varintLen], data...)
-//}
-
-// used for decode before unmarshal
-//func decodeVarintPrefixed(data []byte) ([]byte, error) {
-//	messageLen, varintLen := binary.Uvarint(data)
-//	if varintLen <= 0 {
-//		return nil, errors.New("invalid varint encoding")
-//	}
-//	if uint64(len(data)) < messageLen+uint64(varintLen) {
-//		return nil, errors.New("insufficient data")
-//	}
-//
-//	return data[varintLen : varintLen+int(messageLen)], nil
-//}
-
-//func decodeVarintPrefixed(conn net.Conn) ([]byte, error) {
-//	// Read the length of the data as a varint
-//	var messageLen uint64
-//	var bytesRead int
-//	var buf [binary.MaxVarintLen64]byte
-//
-//	for messageLen == 0 {
-//		n, err := conn.Read(buf[bytesRead : bytesRead+1])
-//		if err != nil {
-//			return nil, err
-//		}
-//		if n == 0 {
-//			continue
-//		}
-//
-//		bytesRead += n
-//		messageLen, _ = binary.Uvarint(buf[:bytesRead])
-//	}
-//
-//	// Read the data itself
-//	data := make([]byte, messageLen)
-//	_, err := io.ReadFull(conn, data)
-//	return data, err
-//}
-
-//package main
-//
-//import (
-//	pb "UPSServer/pb"
-//	ua "UPSServer/pb"
-//	"encoding/binary"
-//	"errors"
-//	"log"
-//	"net"
-//
-//	"github.com/golang/protobuf/proto"
-//)
-
-//
-//func main() {
-//	// Construct the UConnect message
-//	var i int32 = 1
-//	var x int32 = 0
-//	var y int32 = 0
-//	truck := &pb.UInitTruck{
-//		Id: &i,
-//		X:  &x,
-//		Y:  &y,
-//	}
-//
-//	var i2 int32 = 2
-//	var x2 int32 = 0
-//	var y2 int32 = 0
-//	truck2 := &pb.UInitTruck{
-//		Id: &i2,
-//		X:  &x2,
-//		Y:  &y2,
-//	}
-//
-//	worldId := int64(1)
-//	isAmazon := false
-//	connect := &pb.UConnect{
-//		Worldid:  &worldId,
-//		Trucks:   []*pb.UInitTruck{truck, truck2},
-//		IsAmazon: &isAmazon,
-//	}
-//
-//	// Serialize the UConnect message
-//	marshaledBytess, err := proto.Marshal(connect)
-//	if err != nil {
-//		log.Fatalf("Failed to marshal UConnect message: %v", err)
-//	}
-//
-//	// Connect to the server
-//	conn, err := net.Dial("tcp", "vcm-32169.vm.duke.edu:12345")
-//	if err != nil {
-//		log.Fatalf("Failed to connect to server: %v", err)
-//	}
-//	defer conn.Close()
-//
-//	decodedBytes := sendAndRecv(marshaledBytess, conn)
-//
-//	// Unmarshal the UConnected message from the response
-//	connected := &pb.UConnected{}
-//	err = proto.Unmarshal(decodedBytes, connected)
-//
-//	if err != nil {
-//		log.Fatalf("Failed to unmarshal UConnected message: %v", err)
-//	}
-//
-//	log.Printf("Received UConnected message: %v", connected)
-//
-//	// go pick up
-//	var whid int32 = 1
-//	var seqNum int64 = 1
-//	var truckId int32 = 1
-//	pickup := &pb.UGoPickup{
-//		Truckid: &truckId,
-//		Whid:    &whid,
-//		Seqnum:  &seqNum,
-//	}
-//
-//	var seqNum2 int64 = 2
-//	var truckId2 int32 = 2
-//	pickup2 := &pb.UGoPickup{
-//		Truckid: &truckId2,
-//		Whid:    &whid,
-//		Seqnum:  &seqNum2,
-//	}
-//
-//	command := &pb.UCommands{
-//		Pickups: []*pb.UGoPickup{pickup, pickup2},
-//	}
-//
-//	// Serialize the UCommand message
-//	marshaledBytes, err := proto.Marshal(command)
-//	if err != nil {
-//		log.Fatalf("Failed to marshal UConnect message: %v", err)
-//	}
-//	decodedBytes = sendAndRecv(marshaledBytes, conn)
-//	commandACK := &pb.UResponses{}
-//	err = proto.Unmarshal(decodedBytes, commandACK)
-//
-//	if err != nil {
-//		log.Fatalf("Failed to unmarshal UCommands ACK: %v", err)
-//	}
-//
-//	log.Printf("Received UConnected message: %v", commandACK)
-//
-//}
-
 func main() {
+	// connect to mysql db
+	db, err := sql.Open("mysql", "root:Wadqq3.23@tcp(localhost:3306)/upsdb")
+	if err != nil {
+		panic(err.Error())
+	}
 	// Create a channel to listen for signals
 	signalChannel := make(chan os.Signal, 1)
 
@@ -268,6 +47,7 @@ func main() {
 		UnAckedDeliver: make(map[int64]*pb.UGoDeliver),
 		Truck:          trucks,
 		MapTruckShip:   make(map[int32][]int64),
+		DB:             db,
 	}
 
 	go upsServer.LoopSendUnAcked(connW)
@@ -286,7 +66,29 @@ func main() {
 	}()
 
 	for true {
+		uCommands := &pb.UCommands{
+			Queries: []*pb.UQuery{},
+		}
+		for i := int32(0); i < numTruck; i++ {
+			truckId := i
+			seqNum := ups.RandomInt64()
+			uQuery := &pb.UQuery{
+				Truckid: &truckId,
+				Seqnum:  &seqNum,
+			}
+			uCommands.Queries = append(uCommands.Queries, uQuery)
+		}
+		// while send request to world
+		marshaledUCommands, _ := proto.Marshal(uCommands)
+		connectBytes := prefixVarintLength(marshaledUCommands)
 
+		log.Printf("Send UCommand Deliver Request to World")
+		// Send the UConnect message
+		_, err := connW.Write(connectBytes)
+		if err != nil {
+			log.Fatalf("Failed to send UConnect message: %v", err)
+		}
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -327,6 +129,8 @@ func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 		if delivered != nil {
 			ups.HandleUDeliverMade(delivered, connA, connW)
 		}
+
+		//
 
 	}
 }

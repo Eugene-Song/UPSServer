@@ -5,10 +5,14 @@ import (
 	ua "UPSServer/pb"
 	"UPSServer/ups"
 	"encoding/binary"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 //func main() {
@@ -240,6 +244,12 @@ import (
 //}
 
 func main() {
+	// Create a channel to listen for signals
+	signalChannel := make(chan os.Signal, 1)
+
+	// Notify the signalChannel when an interrupt signal (Ctrl+C) is received
+	signal.Notify(signalChannel, syscall.SIGINT)
+
 	// connect to World
 	numTruck := int32(50)
 	connW, worldID := initConnectWorld(numTruck)
@@ -252,16 +262,32 @@ func main() {
 	}
 
 	upsServer := &ups.UPS{
-		SimSpeed: 100,
-		Package:  make(map[int]*ups.PackageMetaData),
-		Truck:    trucks,
+		SimSpeed:       100,
+		Package:        make(map[int64]*ups.PackageMetaData),
+		UnAckedPickup:  make(map[int64]*pb.UGoPickup),
+		UnAckedDeliver: make(map[int64]*pb.UGoDeliver),
+		Truck:          trucks,
+		MapTruckShip:   make(map[int32][]int64),
 	}
-	upsServer.LoopSendUnAcked(connW)
 
-	//
+	go upsServer.LoopSendUnAcked(connW)
 	go recvAmazon(connA, connW, upsServer)
 	go recvWorld(connA, connW, upsServer)
 
+	// Create a goroutine to wait for the interrupt signal
+	go func() {
+		<-signalChannel // Block until an interrupt signal is received
+		upsServer.PrintUPS()
+		// Perform any cleanup or additional actions before exiting
+		fmt.Println("\nReceived Ctrl+C. Performing cleanup...")
+
+		// Exit the program with a success status code (0)
+		os.Exit(0)
+	}()
+
+	for true {
+
+	}
 }
 
 func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
@@ -279,19 +305,28 @@ func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 
 		// handle acked
 		acks := uResponses.Acks
-		ups.DeleteAckedCommand(acks)
+		if acks != nil {
+			ups.DeleteAckedCommand(acks)
+		}
 
 		// 1. error field
 		//errs := uResponses.Error
 
-		// 2. handle finished
-		if *uResponses.Finished {
+		//// 2. handle finished
+		if uResponses.Finished != nil && *uResponses.Finished {
 			connW.Close()
 			connA.Close()
 		}
 		// 3. handle completions
 		completions := uResponses.Completions
-		ups.HandleUFinished(completions, connA)
+		if completions != nil {
+			ups.HandleUFinished(completions, connA, connW)
+		}
+		// 4. handle delivered
+		delivered := uResponses.Delivered
+		if delivered != nil {
+			ups.HandleUDeliverMade(delivered, connA, connW)
+		}
 
 	}
 }
@@ -316,9 +351,16 @@ func recvAmazon(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 		//errs := auCommand.Error
 		// 2. handle pickup request
 		pickups := auCommand.PickupRequests
-		ups.HandlePickupRequest(pickups, connW)
+		if pickups != nil {
+			ups.HandlePickupRequest(pickups, connW, connA)
+		}
 
 		// 3. handle delivery request
+		deliveries := auCommand.DeliverRequests
+		if deliveries != nil {
+			ups.HandleDeliverRequest(deliveries, connW, connA)
+		}
+
 		//deliveries := auCommand.DeliverRequests
 	}
 }
@@ -332,17 +374,19 @@ func initConnectWorld(numTruck int32) (net.Conn, int64) {
 		IsAmazon: &isAmazon,
 	}
 	for i := int32(0); i < numTruck; i++ {
+		id := i
 		x := int32(0)
 		y := int32(0)
 		// Construct the Truck message
 		truck := &pb.UInitTruck{
-			Id: &i,
+			Id: &id,
 			X:  &x,
 			Y:  &y,
 		}
 		connect.Trucks = append(connect.Trucks, truck)
 	}
 
+	log.Printf("Sending Trcuks message: %v", connect.Trucks)
 	// Serialize the UConnect message
 	marshaledConnect, err := proto.Marshal(connect)
 	if err != nil {
@@ -384,7 +428,7 @@ func initAmazon(worldId int64) net.Conn {
 
 	// Connect to the server
 	// TODO: change to Amazon server
-	connA, err := net.Dial("tcp", "")
+	connA, err := net.Dial("tcp", "localhost:8080")
 	if err != nil {
 		log.Fatalf("Failed to connect to Amazon: %v", err)
 	}

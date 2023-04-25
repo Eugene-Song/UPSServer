@@ -2,9 +2,6 @@ package ups
 
 import (
 	pb "UPSServer/pb"
-	"crypto/rand"
-	"encoding/binary"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"log"
 	"net"
@@ -14,8 +11,6 @@ import (
 
 type UPS struct {
 	SimSpeed uint32
-
-	SeqNum int64
 
 	PackageMutex sync.Mutex
 	// mapping between packageId and packageMetaData
@@ -30,66 +25,130 @@ type UPS struct {
 	// mapping of trucks
 	Truck      map[int32]string
 	TruckMutex sync.Mutex
+
+	// mapping between seqNum and shipId for pickUpCommand
+	MapTruckShip      map[int32][]int64
+	MapTruckShipMutex sync.Mutex
 }
 
-func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW net.Conn) {
-
-	ucommands := &pb.UCommands{
-		Pickups:  []*pb.UGoPickup{},
-		Simspeed: &u.SimSpeed,
-	}
-	var truckId int32
-
-	u.TruckMutex.Lock()
-	for k, v := range u.Truck {
-		if v == "idle" || v == "arrive warehouse" || v == "delivering" {
-			//find a truck
-			u.Truck[k] = "traveling"
-			truckId = k
-		}
-	}
-	u.TruckMutex.Unlock()
-
-	// construct UCommands
-	for _, pickUpRequest := range pickUpRequests {
-		seqNum := randomInt64()
-		uGoPickup := &pb.UGoPickup{
-			Truckid: &truckId,
-			Whid:    pickUpRequest.WarehouseId,
-			Seqnum:  &(seqNum),
-		}
-		ucommands.Pickups = append(ucommands.Pickups, uGoPickup)
-		u.UnAckedPickup[seqNum] = uGoPickup
-
-		// fill Package mapping
-		packageMeta := &PackageMetaData{
-			packageId: *pickUpRequest.ShipId,
-			destX:     *pickUpRequest.DestinationX,
-			destY:     *pickUpRequest.DestinationY,
-			whID:      *pickUpRequest.WarehouseId,
-			truckId:   truckId,
-			pickupX:   *pickUpRequest.X,
-			pickupY:   *pickUpRequest.Y,
-		}
-		u.PackageMutex.Lock()
-		u.Package[*pickUpRequest.ShipId] = packageMeta
-		u.PackageMutex.Unlock()
-	}
+func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW net.Conn, connA net.Conn) {
+	log.Printf("Enter HandlePickupRequest function")
+	ucommands := u.ConstructUCommandsPick(pickUpRequests)
+	log.Printf("Successfully construct pickupUCommand: %v", ucommands)
 	// while send request to world
-
 	marshaledUCommands, _ := proto.Marshal(ucommands)
 	connectBytes := prefixVarintLength(marshaledUCommands)
 
+	log.Printf("Send UCommand Pickup Request to World")
 	// Send the UConnect message
 	_, err := connW.Write(connectBytes)
 	if err != nil {
 		log.Fatalf("Failed to send UConnect message: %v", err)
 	}
+
+	// Send Amazon ACKS
+	acks := make([]int64, len(pickUpRequests))
+	for i, each := range pickUpRequests {
+		acks[i] = *each.SeqNum
+	}
+	sendAmazonACK(acks, connA)
+
 }
 
-func (u *UPS) HandleUFinished(uFinishedResponse []*pb.UFinished, connA net.Conn) {
-	// update truck mapping 
-	
+func (u *UPS) HandleDeliverRequest(deliverRequests []*pb.AUDeliverRequest, connW net.Conn, connA net.Conn) {
+
+	log.Printf("Enter HandleDeliverRequest function")
+	ucommands := u.ConstructUCommandsDeliver(deliverRequests)
+	log.Printf("Successfully construct pickupUCommand: %v", ucommands)
+	// while send request to world
+	marshaledUCommands, _ := proto.Marshal(ucommands)
+	connectBytes := prefixVarintLength(marshaledUCommands)
+
+	log.Printf("Send UCommand Deliver Request to World")
+	// Send the UConnect message
+	_, err := connW.Write(connectBytes)
+	if err != nil {
+		log.Fatalf("Failed to send UConnect message: %v", err)
+	}
+
+	// Send Amazon ACKS
+	acks := make([]int64, len(deliverRequests))
+	for i, each := range deliverRequests {
+		acks[i] = *each.SeqNum
+	}
+	sendAmazonACK(acks, connA)
+
+}
+
+func (u *UPS) HandleUFinished(uFinishedResponses []*pb.UFinished, connA net.Conn, connW net.Conn) {
+	// update truck mapping
+	// 1. get shipid
+	// 2. change truck status
+	// 3. send load req to amazon
+	// 4. send ACKs back to world
+	shipIds := []int64{}
+	u.MapTruckShipMutex.Lock()
+	u.TruckMutex.Lock()
+	for _, uFinishedResponse := range uFinishedResponses {
+		truckId := *uFinishedResponse.Truckid
+		// If the truck has finished all the deliveries and idle
+		if *uFinishedResponse.Status == "idle" {
+			u.Truck[truckId] = "idle"
+			continue
+		}
+
+		if len(u.MapTruckShip[truckId]) != 0 {
+			shipIds = u.MapTruckShip[truckId]
+			u.MapTruckShip[truckId] = []int64{}
+			u.Truck[truckId] = "arrive warehouse"
+			sendAmazonLoadReq(shipIds, truckId, connA)
+		} else {
+			continue
+		}
+	}
+	u.TruckMutex.Unlock()
+	u.MapTruckShipMutex.Unlock()
+
+	// Send World ACKS
+	acks := make([]int64, len(uFinishedResponses))
+	for i, each := range uFinishedResponses {
+		acks[i] = *each.Seqnum
+	}
+	sendWorldACK(acks, connW)
+}
+
+func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, connA net.Conn, connW net.Conn) {
+
+	uaCommand := &pb.UACommand{
+		Delivered: []*pb.UADelivered{},
+	}
+	for _, uDeliverMadeResponse := range uDeliverMadeResponses {
+		seqNum := randomInt64()
+		shipId := *uDeliverMadeResponse.Packageid
+		uaDelivered := &pb.UADelivered{
+			SeqNum: &seqNum,
+			ShipId: &shipId,
+		}
+		uaCommand.Delivered = append(uaCommand.Delivered, uaDelivered)
+	}
+
+	// send delivered to Amazon
+	marshaledUCommands, _ := proto.Marshal(uaCommand)
+	connectBytes := prefixVarintLength(marshaledUCommands)
+
+	// Send the UConnect message
+	_, err := connA.Write(connectBytes)
+	if err != nil {
+		log.Fatalf("Failed to send uaCommand message: %v", err)
+	}
+	log.Printf("Sending Amazon delivered: %v", uaCommand)
+
+	// Send World ACKS
+	acks := make([]int64, len(uDeliverMadeResponses))
+	for i, each := range uDeliverMadeResponses {
+		acks[i] = *each.Seqnum
+	}
+	sendWorldACK(acks, connW)
 }
 
 // function to delete acked command
@@ -108,6 +167,7 @@ func (u *UPS) DeleteAckedCommand(acks []int64) {
 
 func (u *UPS) LoopSendUnAcked(conn net.Conn) {
 	for true {
+		log.Printf("One loop start send unacked!!!")
 		ucommands := &pb.UCommands{
 			Pickups:    []*pb.UGoPickup{},
 			Deliveries: []*pb.UGoDeliver{},
@@ -129,13 +189,8 @@ func (u *UPS) LoopSendUnAcked(conn net.Conn) {
 				log.Fatalf("Failed to send UConnect message: %v", err)
 			}
 		}
+		log.Printf("send unacked, enter next loop!!!")
 		time.Sleep(5 * time.Second)
 	}
-}
-
-func randomInt64() int64 {
-	var randomInt64 int64
-	_ = binary.Read(rand.Reader, binary.LittleEndian, &randomInt64)
-	fmt.Println("Generated random int64:", randomInt64)
-	return randomInt64
+	defer conn.Close()
 }

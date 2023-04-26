@@ -37,7 +37,7 @@ type UPS struct {
 func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW net.Conn, connA net.Conn) {
 	log.Printf("Enter HandlePickupRequest function")
 	ucommands := u.ConstructUCommandsPick(pickUpRequests)
-	log.Printf("Successfully construct pickupUCommand: %v", ucommands)
+	log.Printf("Successfully construct pickup-UCommand: %v", ucommands)
 	// while send request to world
 	marshaledUCommands, _ := proto.Marshal(ucommands)
 	connectBytes := prefixVarintLength(marshaledUCommands)
@@ -46,7 +46,7 @@ func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW ne
 	// Send the UConnect message
 	_, err := connW.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UConnect message: %v", err)
+		log.Printf("Failed to send Pickup UCommand message: %v", err)
 	}
 
 	// Send Amazon ACKS
@@ -54,15 +54,15 @@ func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW ne
 	for i, each := range pickUpRequests {
 		acks[i] = *each.SeqNum
 	}
-	sendAmazonACK(acks, connA)
 
+	sendAmazonACK(acks, connA)
 }
 
 func (u *UPS) HandleDeliverRequest(deliverRequests []*pb.AUDeliverRequest, connW net.Conn, connA net.Conn) {
 
 	log.Printf("Enter HandleDeliverRequest function")
 	ucommands := u.ConstructUCommandsDeliver(deliverRequests)
-	log.Printf("Successfully construct pickupUCommand: %v", ucommands)
+	log.Printf("Successfully construct Deliver-UCommands: %v", ucommands)
 	// while send request to world
 	marshaledUCommands, _ := proto.Marshal(ucommands)
 	connectBytes := prefixVarintLength(marshaledUCommands)
@@ -71,7 +71,7 @@ func (u *UPS) HandleDeliverRequest(deliverRequests []*pb.AUDeliverRequest, connW
 	// Send the UConnect message
 	_, err := connW.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UConnect message: %v", err)
+		log.Printf("Failed to send Deliver UCommand message: %v", err)
 	}
 
 	// Send Amazon ACKS
@@ -80,12 +80,13 @@ func (u *UPS) HandleDeliverRequest(deliverRequests []*pb.AUDeliverRequest, connW
 		acks[i] = *each.SeqNum
 	}
 	sendAmazonACK(acks, connA)
-
 }
 
+// function for handling UFinished from World
 func (u *UPS) HandleUFinished(uFinishedResponses []*pb.UFinished, connA net.Conn, connW net.Conn) {
+	log.Printf("Enter HandleUFinished function, uFinished responses: %v", uFinishedResponses)
 	// update truck mapping
-	// 1. get shipid
+	// 1. get shipId that matches with truckId
 	// 2. change truck status
 	// 3. send load req to amazon
 	// 4. send ACKs back to world
@@ -96,10 +97,12 @@ func (u *UPS) HandleUFinished(uFinishedResponses []*pb.UFinished, connA net.Conn
 		truckId := *uFinishedResponse.Truckid
 		// If the truck has finished all the deliveries and idle
 		if *uFinishedResponse.Status == "idle" {
+			log.Printf("Truck complete all deliveries: %v", truckId)
 			u.Truck[truckId] = "idle"
 			continue
 		}
 
+		// if the truck has associated packages on it
 		if len(u.MapTruckShip[truckId]) != 0 {
 			shipIds = u.MapTruckShip[truckId]
 			u.MapTruckShip[truckId] = []int64{}
@@ -138,20 +141,22 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 		}
 		uaCommand.Delivered = append(uaCommand.Delivered, uaDelivered)
 
-		// change status for the packages status to delivered
+		// update package status to delivered
 		u.Package[shipId].status = "delivered"
+		u.Package[shipId].currX = u.Package[shipId].destX
+		u.Package[shipId].currY = u.Package[shipId].destY
 	}
 
 	// send delivered to Amazon
 	marshaledUCommands, _ := proto.Marshal(uaCommand)
 	connectBytes := prefixVarintLength(marshaledUCommands)
 
+	log.Printf("Sending Amazon UADelivered: %v", uaCommand)
 	// Send the UConnect message
 	_, err := connA.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send uaCommand message: %v", err)
+		log.Printf("Failed to send UADelivered-UACommand message: %v", err)
 	}
-	log.Printf("Sending Amazon delivered: %v", uaCommand)
 
 	// Send World ACKS
 	acks := make([]int64, len(uDeliverMadeResponses))

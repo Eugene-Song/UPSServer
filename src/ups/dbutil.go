@@ -7,17 +7,8 @@ import (
 )
 
 func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
-	db := u.DB
 
-	//    packageID BIGINT PRIMARY KEY,
-	//    status VARCHAR(255) NOT NULL,
-	//    currentX INT,
-	//    currentY INT,
-	//    destinationX INT,
-	//    destinationY INT,
-	//    username VARCHAR(255),
-	//    FOREIGN KEY (username) REFERENCES users(username)
-	//    date DATE NOT NULL,
+	db := u.DB
 	query := `
 		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date)
 		VALUES (?, ?, ?, ?, ?, ?, ?, NOW())

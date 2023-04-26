@@ -32,8 +32,10 @@ func main() {
 	// connect to World
 	numTruck := int32(50)
 	connW, worldID := initConnectWorld(numTruck)
+	log.Printf("UPS successfully connect to worldId: %v", worldID)
 	// connect to Amazon, send worldId
 	connA := initAmazon(worldID)
+	log.Printf("UPS send UAStart to amazon!")
 
 	trucks := make(map[int32]string, numTruck)
 	for i := int32(0); i < numTruck; i++ {
@@ -82,11 +84,11 @@ func main() {
 		marshaledUCommands, _ := proto.Marshal(uCommands)
 		connectBytes := prefixVarintLength(marshaledUCommands)
 
-		log.Printf("Send UCommand Deliver Request to World")
+		log.Printf("For Loop Send UCommand Query Truck to World")
 		// Send the UConnect message
 		_, err := connW.Write(connectBytes)
 		if err != nil {
-			log.Fatalf("Failed to send UConnect message: %v", err)
+			log.Printf("Failed to send UCommand Query Truck to World: %v", err)
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -104,6 +106,7 @@ func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 		if err != nil {
 			continue
 		}
+		log.Printf("recvWorld function, just recv UResponses from World: %v", uResponses)
 
 		// handle acked
 		acks := uResponses.Acks
@@ -154,8 +157,10 @@ func recvAmazon(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 		if err != nil {
 			continue
 		}
+		log.Printf("recvAmazon function, just recv auCommand from Amazon: %v", auCommand)
 		// 1. error field
 		//errs := auCommand.Error
+
 		// 2. handle pickup request
 		pickups := auCommand.PickupRequests
 		if pickups != nil {
@@ -230,14 +235,14 @@ func initAmazon(worldId int64) net.Conn {
 	// Serialize the UAstart message
 	marshaledConnect, err := proto.Marshal(connect)
 	if err != nil {
-		log.Fatalf("Failed to marshal UAstart message: %v", err)
+		log.Printf("Failed to marshal UAstart message: %v", err)
 	}
 
 	// Connect to the server
 	// TODO: change to Amazon server
 	connA, err := net.Dial("tcp", "localhost:8080")
 	if err != nil {
-		log.Fatalf("Failed to connect to Amazon: %v", err)
+		log.Printf("Failed to connect to Amazon: %v", err)
 	}
 
 	// Encode the length of the message as a varint and prepend it to the message
@@ -246,7 +251,7 @@ func initAmazon(worldId int64) net.Conn {
 	// Send the UAstart message
 	_, err = connA.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UAstart message: %v", err)
+		log.Printf("Failed to send UAstart message: %v", err)
 	}
 
 	return connA
@@ -259,7 +264,7 @@ func sendAndRecv(serialized []byte, conn net.Conn) []byte {
 	// Send the UConnect message
 	_, err := conn.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UConnect message: %v", err)
+		log.Printf("Failed to send UConnect message: %v", err)
 	}
 
 	// receive from connection

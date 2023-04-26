@@ -158,13 +158,13 @@ func sendAmazonACK(acks []int64, connA net.Conn) {
 	}
 	// while send request to world
 	marshaledUCommands, _ := proto.Marshal(uaCommand)
-	log.Printf("Sending Amazon ACK: %v", uaCommand)
 	connectBytes := prefixVarintLength(marshaledUCommands)
 
+	log.Printf("Sending Amazon ACK: %v", uaCommand)
 	// Send the UConnect message
 	_, err := connA.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UConnect message: %v", err)
+		log.Printf("Failed to send ACK message to Amazon: %v", err)
 	}
 }
 
@@ -176,12 +176,12 @@ func sendWorldACK(acks []int64, connW net.Conn) {
 	marshaledUCommands, _ := proto.Marshal(uCommands)
 	connectBytes := prefixVarintLength(marshaledUCommands)
 
+	log.Printf("Sending world ACK: %v", uCommands)
 	// Send the UConnect message
 	_, err := connW.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UConnect message: %v", err)
+		log.Printf("Failed to send ACK message to World: %v", err)
 	}
-	log.Printf("Sending world ACK: %v", uCommands)
 }
 
 func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
@@ -200,11 +200,11 @@ func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
 	}
 	marshaledUCommands, _ := proto.Marshal(uaCommand)
 	connectBytes := prefixVarintLength(marshaledUCommands)
-	log.Printf("Sending Amazon Load Request: %v", uaCommand)
+	log.Printf("Sending Amazon UACommand Load Request: %v", uaCommand)
 	// Send the UConnect message
 	_, err := connA.Write(connectBytes)
 	if err != nil {
-		log.Fatalf("Failed to send UACommand message: %v", err)
+		log.Printf("Failed to send UACommand Load Request message: %v", err)
 	}
 }
 

@@ -87,3 +87,4 @@ message UResponses{
   repeated UTruck truckstatus = 5;
   repeated UErr error = 6;
 }
+

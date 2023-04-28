@@ -1,4 +1,5 @@
 import { db } from "../db.js";
+import jwt from 'jsonwebtoken';
 
 export const allPakcages = (req, res) => {
     const token = req.cookies.access_token;
@@ -6,8 +7,6 @@ export const allPakcages = (req, res) => {
 
     jwt.verify(token, "jwtkey", (err, userInfo) => {
         if (err) return res.status(403).json("JWT token is not valid");
-
-        const userId = userInfo.username;
 
         // Replace this query with the actual query for your database
         const query = 'SELECT * FROM package WHERE username = ?';

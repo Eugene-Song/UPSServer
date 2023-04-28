@@ -38,6 +38,7 @@ message AUPickupRequest{
   required int32 destinationX = 6;
   required int32 destinationY = 7;
   optional string upsName = 8;
+  repeated string items = 9;
 }
 
 

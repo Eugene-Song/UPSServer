@@ -4,7 +4,6 @@ import (
 	pb "UPSServer/pb"
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"log"
 	"net"
@@ -33,6 +32,8 @@ type PackageMetaData struct {
 	currX int32
 	// current Y
 	currY int32
+	// item details
+	itemDetails []string
 }
 
 // used for encode after marshal
@@ -70,21 +71,24 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 			Seqnum:  &(seqNum),
 		}
 		ucommands.Pickups = append(ucommands.Pickups, uGoPickup)
+		u.UnAckedPickupMutex.Lock()
 		u.UnAckedPickup[seqNum] = uGoPickup
+		u.UnAckedPickupMutex.Unlock()
 
 		// fill Package mapping
 		packageMeta := &PackageMetaData{
-			packageId: *pickUpRequest.ShipId,
-			destX:     *pickUpRequest.DestinationX,
-			destY:     *pickUpRequest.DestinationY,
-			whID:      *pickUpRequest.WarehouseId,
-			truckId:   truckId,
-			pickupX:   *pickUpRequest.X,
-			pickupY:   *pickUpRequest.Y,
-			username:  *pickUpRequest.UpsName,
-			status:    "truck en route to warehouse",
-			currX:     *pickUpRequest.X,
-			currY:     *pickUpRequest.Y,
+			packageId:   pickUpRequest.GetShipId(),
+			destX:       pickUpRequest.GetDestinationX(),
+			destY:       pickUpRequest.GetDestinationY(),
+			whID:        pickUpRequest.GetWarehouseId(),
+			truckId:     truckId,
+			pickupX:     pickUpRequest.GetX(),
+			pickupY:     pickUpRequest.GetY(),
+			username:    pickUpRequest.GetUpsName(),
+			status:      "truck en route to warehouse",
+			currX:       pickUpRequest.GetX(),
+			currY:       pickUpRequest.GetY(),
+			itemDetails: pickUpRequest.GetItems(),
 		}
 		u.PackageMutex.Lock()
 		u.Package[*pickUpRequest.ShipId] = packageMeta
@@ -144,15 +148,18 @@ func (u *UPS) ConstructUCommandsDeliver(deliverRequests []*pb.AUDeliverRequest) 
 
 		// update package status
 		packageData.status = "out for delivery"
+		u.updatePackageTable(packageData)
 	}
 	u.PackageMutex.Unlock()
 
+	u.UnAckedDeliverMutex.Lock()
 	u.UnAckedDeliver[seqNum] = uGoDeliver
+	u.UnAckedDeliverMutex.Unlock()
 
 	return ucommands
 }
 
-func sendAmazonACK(acks []int64, connA net.Conn) {
+func SendAmazonACK(acks []int64, connA net.Conn) {
 	uaCommand := &pb.UACommand{
 		Acks: acks,
 	}
@@ -176,7 +183,8 @@ func sendWorldACK(acks []int64, connW net.Conn) {
 	marshaledUCommands, _ := proto.Marshal(uCommands)
 	connectBytes := prefixVarintLength(marshaledUCommands)
 
-	log.Printf("Sending world ACK: %v", uCommands)
+	//log.Printf("Sending world ACK: %v", uCommands)
+	log.Printf("Sending world ACK!")
 	// Send the UConnect message
 	_, err := connW.Write(connectBytes)
 	if err != nil {
@@ -184,7 +192,7 @@ func sendWorldACK(acks []int64, connW net.Conn) {
 	}
 }
 
-func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
+func (u *UPS) sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
 	uaCommand := &pb.UACommand{
 		LoadRequests: []*pb.UALoadRequest{},
 	}
@@ -196,6 +204,10 @@ func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
 			TruckId: &truckId,
 			ShipId:  &shipId,
 		}
+		u.UnAckedLoadMutex.Lock()
+		u.UnAckedLoad[seqNum] = uaLoadRequest
+		u.UnAckedLoadMutex.Unlock()
+
 		uaCommand.LoadRequests = append(uaCommand.GetLoadRequests(), uaLoadRequest)
 	}
 	marshaledUCommands, _ := proto.Marshal(uaCommand)
@@ -212,7 +224,6 @@ func sendAmazonLoadReq(shipIds []int64, truckId int32, connA net.Conn) {
 func RandomInt64() int64 {
 	var randomInt64 int64
 	_ = binary.Read(rand.Reader, binary.LittleEndian, &randomInt64)
-	fmt.Println("Generated random int64:", randomInt64)
 	return randomInt64
 }
 
@@ -221,6 +232,7 @@ func (u *UPS) updatePackLoadStatus(shipIds []int64) {
 	for _, shipId := range shipIds {
 		packageMeta := u.Package[shipId]
 		packageMeta.status = "truck waiting for package"
+		u.updatePackageTable(packageMeta)
 	}
 	u.PackageMutex.Unlock()
 

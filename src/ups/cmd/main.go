@@ -94,7 +94,7 @@ func main() {
 	}
 }
 
-func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
+func recvWorld(connA net.Conn, connW net.Conn, u *ups.UPS) {
 	for {
 		decodedBytes, err := recvConn(connW)
 		if err != nil {
@@ -106,12 +106,12 @@ func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 		if err != nil {
 			continue
 		}
-		log.Printf("recvWorld function, just recv UResponses from World: %v", uResponses)
+		//log.Printf("recvWorld function, just recv UResponses from World: %v", uResponses)
 
 		// handle acked
 		acks := uResponses.Acks
 		if acks != nil {
-			ups.DeleteAckedCommand(acks)
+			u.DeleteAckedCommand(acks)
 		}
 
 		// 1. error field
@@ -125,24 +125,24 @@ func recvWorld(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 		// 3. handle completions
 		completions := uResponses.Completions
 		if completions != nil {
-			ups.HandleUFinished(completions, connA, connW)
+			u.HandleUFinished(completions, connA, connW)
 		}
 		// 4. handle delivered
 		delivered := uResponses.Delivered
 		if delivered != nil {
-			ups.HandleUDeliverMade(delivered, connA, connW)
+			u.HandleUDeliverMade(delivered, connA, connW)
 		}
 
 		//5. handle truckstatus
 		truckStatus := uResponses.Truckstatus
 		if truckStatus != nil {
-			ups.HandleTruckStatus(truckStatus, connW)
+			u.HandleTruckStatus(truckStatus, connW)
 		}
 	}
 }
 
 // used for recieve AUcommand from Amazon
-func recvAmazon(connA net.Conn, connW net.Conn, ups *ups.UPS) {
+func recvAmazon(connA net.Conn, connW net.Conn, u *ups.UPS) {
 	// read from connection
 	// unmarshal
 	// send to World
@@ -158,22 +158,45 @@ func recvAmazon(connA net.Conn, connW net.Conn, ups *ups.UPS) {
 			continue
 		}
 		log.Printf("recvAmazon function, just recv auCommand from Amazon: %v", auCommand)
+
+		acks := []int64{}
 		// 1. error field
 		//errs := auCommand.Error
 
 		// 2. handle pickup request
 		pickups := auCommand.PickupRequests
 		if pickups != nil {
-			ups.HandlePickupRequest(pickups, connW, connA)
+			for _, pickup := range pickups {
+				seqNum := pickup.GetSeqNum()
+				_, keyExist := u.AmazonSeqNum[seqNum]
+				if keyExist {
+					// seqNum already exist, send it back to amazon
+					// while send request to world
+					acks = append(acks, seqNum)
+				}
+			}
+
+			u.HandlePickupRequest(pickups, connW, connA)
 		}
 
 		// 3. handle delivery request
 		deliveries := auCommand.DeliverRequests
 		if deliveries != nil {
-			ups.HandleDeliverRequest(deliveries, connW, connA)
+			for _, delivery := range deliveries {
+				seqNum := delivery.GetSeqNum()
+				_, keyExist := u.AmazonSeqNum[seqNum]
+				if keyExist {
+					// seqNum already exist, send it back to amazon
+					// while send request to world
+					acks = append(acks, seqNum)
+				}
+			}
+			u.HandleDeliverRequest(deliveries, connW, connA)
 		}
 
-		//deliveries := auCommand.DeliverRequests
+		if len(acks) > 0 {
+			ups.SendAmazonACK(acks, connA)
+		}
 	}
 }
 
@@ -240,7 +263,7 @@ func initAmazon(worldId int64) net.Conn {
 
 	// Connect to the server
 	// TODO: change to Amazon server
-	connA, err := net.Dial("tcp", "localhost:8080")
+	connA, err := net.Dial("tcp", "10.197.73.115:8080")
 	if err != nil {
 		log.Printf("Failed to connect to Amazon: %v", err)
 	}

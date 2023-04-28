@@ -1,26 +1,12 @@
 package ups
 
 import (
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 )
 
 func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
-
 	db := u.DB
-	query := `
-		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date)
-		VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-		ON DUPLICATE KEY UPDATE
-			status = VALUES(status),
-			currentX = VALUES(currentX),
-			currentY = VALUES(currentY),
-			destinationX = VALUES(destinationX),
-			destinationY = VALUES(destinationY),
-			username = VALUES(username),
-			date = NOW()
-	`
 
 	packageID := packageMetaData.packageId
 	status := packageMetaData.status
@@ -30,7 +16,34 @@ func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
 	destinationX := packageMetaData.destX
 	destinationY := packageMetaData.destY
 
+	var query string
+	if username != "" {
+		query = `
+		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date)
+		VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) AS new_values
+		ON DUPLICATE KEY UPDATE
+			status = new_values.status,
+			currentX = new_values.currentX,
+			currentY = new_values.currentY,
+			destinationX = new_values.destinationX,
+			destinationY = new_values.destinationY,
+			username = new_values.username;
+	`
+	} else {
+		query = `
+		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date)
+		VALUES (?, ?, ?, ?, ?, ?, NULL, NOW()) AS new_values
+		ON DUPLICATE KEY UPDATE
+			status = new_values.status,
+			currentX = new_values.currentX,
+			currentY = new_values.currentY,
+			destinationX = new_values.destinationX,
+			destinationY = new_values.destinationY,
+	`
+	}
+
 	result, err := db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,6 +53,6 @@ func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Successfully inserted or updated row with ID %d. Rows affected: %d\n", packageID, affectedRows)
+	log.Printf("Successfully inserted or updated row with ID %d. Rows affected: %d\n", packageID, affectedRows)
 
 }

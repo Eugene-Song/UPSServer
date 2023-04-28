@@ -13,15 +13,25 @@ import (
 type UPS struct {
 	SimSpeed uint32
 
-	PackageMutex sync.Mutex
 	// mapping between packageId and packageMetaData
-	Package map[int64]*PackageMetaData
+	PackageMutex sync.Mutex
+	Package      map[int64]*PackageMetaData
 
 	// mapping between seqNum and NOT-ACKED pickUpCommand
-	UnAckedPickup map[int64]*pb.UGoPickup
+	UnAckedPickupMutex sync.Mutex
+	UnAckedPickup      map[int64]*pb.UGoPickup
 
 	// mapping between seqNum and NOT-ACKED deliverCommand
-	UnAckedDeliver map[int64]*pb.UGoDeliver
+	UnAckedDeliverMutex sync.Mutex
+	UnAckedDeliver      map[int64]*pb.UGoDeliver
+
+	// mapping between seqNum and NOT-ACKED UAloadRequest
+	UnAckedLoadMutex sync.Mutex
+	UnAckedLoad      map[int64]*pb.UALoadRequest
+
+	// mapping between seqNum and NOT-ACKED UADelivered
+	UnAckedUADeliveredMutex sync.Mutex
+	UnAckedUADelivered      map[int64]*pb.UADelivered
 
 	// mapping of trucks
 	Truck      map[int32]string
@@ -32,6 +42,9 @@ type UPS struct {
 	MapTruckShipMutex sync.Mutex
 
 	DB *sql.DB
+
+	// keep all seqNum for Amazon AUCommand
+	AmazonSeqNum map[int64]bool
 }
 
 func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW net.Conn, connA net.Conn) {
@@ -55,7 +68,7 @@ func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW ne
 		acks[i] = *each.SeqNum
 	}
 
-	sendAmazonACK(acks, connA)
+	SendAmazonACK(acks, connA)
 }
 
 func (u *UPS) HandleDeliverRequest(deliverRequests []*pb.AUDeliverRequest, connW net.Conn, connA net.Conn) {
@@ -79,7 +92,7 @@ func (u *UPS) HandleDeliverRequest(deliverRequests []*pb.AUDeliverRequest, connW
 	for i, each := range deliverRequests {
 		acks[i] = *each.SeqNum
 	}
-	sendAmazonACK(acks, connA)
+	SendAmazonACK(acks, connA)
 }
 
 // function for handling UFinished from World
@@ -111,7 +124,7 @@ func (u *UPS) HandleUFinished(uFinishedResponses []*pb.UFinished, connA net.Conn
 			// change status for all the packages or shipids
 			u.updatePackLoadStatus(shipIds)
 
-			sendAmazonLoadReq(shipIds, truckId, connA)
+			u.sendAmazonLoadReq(shipIds, truckId, connA)
 		} else {
 			continue
 		}
@@ -139,12 +152,18 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 			SeqNum: &seqNum,
 			ShipId: &shipId,
 		}
+		u.UnAckedUADeliveredMutex.Lock()
+		u.UnAckedUADelivered[seqNum] = uaDelivered
+		u.UnAckedUADeliveredMutex.Unlock()
+
 		uaCommand.Delivered = append(uaCommand.Delivered, uaDelivered)
 
 		// update package status to delivered
-		u.Package[shipId].status = "delivered"
-		u.Package[shipId].currX = u.Package[shipId].destX
-		u.Package[shipId].currY = u.Package[shipId].destY
+		packageMeta := u.Package[shipId]
+		packageMeta.status = "delivered"
+		packageMeta.currX = u.Package[shipId].destX
+		packageMeta.currY = u.Package[shipId].destY
+		u.updatePackageTable(packageMeta)
 	}
 
 	// send delivered to Amazon
@@ -206,7 +225,7 @@ func (u *UPS) DeleteAckedCommand(acks []int64) {
 	}
 }
 
-func (u *UPS) LoopSendUnAcked(conn net.Conn) {
+func (u *UPS) LoopSendUnAcked(connW net.Conn) {
 	for true {
 		log.Printf("One loop start send unacked!!!")
 		ucommands := &pb.UCommands{
@@ -225,7 +244,7 @@ func (u *UPS) LoopSendUnAcked(conn net.Conn) {
 			connectBytes := prefixVarintLength(marshaledUCommands)
 
 			// Send the UConnect message
-			_, err := conn.Write(connectBytes)
+			_, err := connW.Write(connectBytes)
 			if err != nil {
 				log.Fatalf("Failed to send UConnect message: %v", err)
 			}
@@ -233,5 +252,5 @@ func (u *UPS) LoopSendUnAcked(conn net.Conn) {
 		log.Printf("send unacked, enter next loop!!!")
 		time.Sleep(5 * time.Second)
 	}
-	defer conn.Close()
+	defer connW.Close()
 }

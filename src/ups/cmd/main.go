@@ -54,7 +54,7 @@ func main() {
 	}
 
 	upsServer := &ups.UPS{
-		SimSpeed:           100,
+		SimSpeed:           50,
 		Package:            make(map[int64]*ups.PackageMetaData),
 		UnAckedPickup:      make(map[int64]*pb.UGoPickup),
 		UnAckedDeliver:     make(map[int64]*pb.UGoDeliver),
@@ -301,7 +301,7 @@ func initAmazon(worldId int64) net.Conn {
 
 	// Connect to the server
 	// TODO: change to Amazon server
-	connA, err := net.Dial("tcp", "172.20.1.5:8080")
+	connA, err := net.Dial("tcp", "vcm-32290.vm.duke.edu:54321")
 	if err != nil {
 		log.Printf("Failed to connect to Amazon: %v", err)
 	}

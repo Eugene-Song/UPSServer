@@ -226,15 +226,15 @@ type AUPickupRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	SeqNum       *int64   `protobuf:"varint,1,req,name=seqNum" json:"seqNum,omitempty"`
-	ShipId       *int64   `protobuf:"varint,2,req,name=shipId" json:"shipId,omitempty"`
-	WarehouseId  *int32   `protobuf:"varint,3,req,name=warehouseId" json:"warehouseId,omitempty"`
-	X            *int32   `protobuf:"varint,4,req,name=x" json:"x,omitempty"` // location of the warehouse
-	Y            *int32   `protobuf:"varint,5,req,name=y" json:"y,omitempty"` // location of the warehouse
-	DestinationX *int32   `protobuf:"varint,6,req,name=destinationX" json:"destinationX,omitempty"`
-	DestinationY *int32   `protobuf:"varint,7,req,name=destinationY" json:"destinationY,omitempty"`
-	UpsName      *string  `protobuf:"bytes,8,opt,name=upsName" json:"upsName,omitempty"`
-	Items        []string `protobuf:"bytes,9,rep,name=items" json:"items,omitempty"`
+	SeqNum       *int64  `protobuf:"varint,1,req,name=seqNum" json:"seqNum,omitempty"`
+	ShipId       *int64  `protobuf:"varint,2,req,name=shipId" json:"shipId,omitempty"`
+	WarehouseId  *int32  `protobuf:"varint,3,req,name=warehouseId" json:"warehouseId,omitempty"`
+	X            *int32  `protobuf:"varint,4,req,name=x" json:"x,omitempty"` // location of the warehouse
+	Y            *int32  `protobuf:"varint,5,req,name=y" json:"y,omitempty"` // location of the warehouse
+	DestinationX *int32  `protobuf:"varint,6,req,name=destinationX" json:"destinationX,omitempty"`
+	DestinationY *int32  `protobuf:"varint,7,req,name=destinationY" json:"destinationY,omitempty"`
+	UpsName      *string `protobuf:"bytes,8,opt,name=upsName" json:"upsName,omitempty"`
+	Items        *string `protobuf:"bytes,9,req,name=items" json:"items,omitempty"`
 }
 
 func (x *AUPickupRequest) Reset() {
@@ -325,11 +325,11 @@ func (x *AUPickupRequest) GetUpsName() string {
 	return ""
 }
 
-func (x *AUPickupRequest) GetItems() []string {
-	if x != nil {
-		return x.Items
+func (x *AUPickupRequest) GetItems() string {
+	if x != nil && x.Items != nil {
+		return *x.Items
 	}
-	return nil
+	return ""
 }
 
 // U -> A Arrived, ready to load
@@ -616,7 +616,7 @@ var file_ua_proto_rawDesc = []byte{
 	0x73, 0x74, 0x69, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x59, 0x12, 0x18, 0x0a, 0x07, 0x75, 0x70,
 	0x73, 0x4e, 0x61, 0x6d, 0x65, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x75, 0x70, 0x73,
 	0x4e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x18, 0x09, 0x20,
-	0x03, 0x28, 0x09, 0x52, 0x05, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x22, 0x59, 0x0a, 0x0d, 0x55, 0x41,
+	0x02, 0x28, 0x09, 0x52, 0x05, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x22, 0x59, 0x0a, 0x0d, 0x55, 0x41,
 	0x4c, 0x6f, 0x61, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x73,
 	0x65, 0x71, 0x4e, 0x75, 0x6d, 0x18, 0x01, 0x20, 0x02, 0x28, 0x03, 0x52, 0x06, 0x73, 0x65, 0x71,
 	0x4e, 0x75, 0x6d, 0x12, 0x18, 0x0a, 0x07, 0x74, 0x72, 0x75, 0x63, 0x6b, 0x49, 0x64, 0x18, 0x02,

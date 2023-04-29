@@ -1,6 +1,7 @@
 package ups
 
 import (
+	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 )
@@ -38,11 +39,16 @@ func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
 			currentX = new_values.currentX,
 			currentY = new_values.currentY,
 			destinationX = new_values.destinationX,
-			destinationY = new_values.destinationY,
+			destinationY = new_values.destinationY;
 	`
 	}
-
-	result, err := db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username)
+	var result sql.Result
+	var err error
+	if username != "" {
+		result, err = db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username)
+	} else {
+		result, err = db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY)
+	}
 
 	if err != nil {
 		log.Fatal(err)

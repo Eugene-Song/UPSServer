@@ -33,7 +33,7 @@ type PackageMetaData struct {
 	// current Y
 	currY int32
 	// item details
-	itemDetails []string
+	itemDetails string
 }
 
 // used for encode after marshal
@@ -66,6 +66,7 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 
 	u.PackageMutex.Lock()
 	defer u.PackageMutex.Unlock()
+	log.Printf("Successfully acquire PackageMutex lock")
 	for _, pickUpRequest := range pickUpRequests {
 		seqNum := RandomInt64()
 		uGoPickup := &pb.UGoPickup{
@@ -96,6 +97,7 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 		u.Package[*pickUpRequest.ShipId] = packageMeta
 
 		u.updatePackageTable(packageMeta)
+		log.Printf("Successfully update package table in ConstructUCommandsPick.")
 
 		u.MapTruckShipMutex.Lock()
 		shipIds, ok := u.MapTruckShip[truckId]
@@ -230,10 +232,11 @@ func RandomInt64() int64 {
 
 func (u *UPS) updatePackLoadStatus(shipIds []int64) {
 	u.PackageMutex.Lock()
-	defer u.PackageMutex.Unlock()
 	for _, shipId := range shipIds {
 		packageMeta := u.Package[shipId]
 		packageMeta.Status = "truck waiting for package"
 		u.updatePackageTable(packageMeta)
 	}
+	u.PackageMutex.Unlock()
+
 }

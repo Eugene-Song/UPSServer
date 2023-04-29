@@ -199,7 +199,6 @@ func (u *UPS) HandleTruckStatus(truckStatuses []*pb.UTruck, connW net.Conn) {
 		truckX := truckStatus.GetX()
 		truckY := truckStatus.GetY()
 
-		u.PackageMutex.Lock()
 		for _, v := range u.Package {
 			if v.TruckId == truckID && v.Status == "out for delivery" {
 				v.currX = truckX
@@ -255,7 +254,7 @@ func (u *UPS) LoopSendUnAcked(connW net.Conn) {
 			}
 		}
 		log.Printf("send unacked, enter next loop!!!")
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Millisecond * 100)
 	}
 	defer connW.Close()
 }

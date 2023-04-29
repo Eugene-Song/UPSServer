@@ -145,6 +145,10 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 	uaCommand := &pb.UACommand{
 		Delivered: []*pb.UADelivered{},
 	}
+
+	u.PackageMutex.Lock()
+	defer u.PackageMutex.Unlock()
+
 	for _, uDeliverMadeResponse := range uDeliverMadeResponses {
 		seqNum := RandomInt64()
 		shipId := *uDeliverMadeResponse.Packageid
@@ -160,9 +164,9 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 
 		// update package status to delivered
 		packageMeta := u.Package[shipId]
-		packageMeta.status = "delivered"
-		packageMeta.currX = u.Package[shipId].destX
-		packageMeta.currY = u.Package[shipId].destY
+		packageMeta.Status = "delivered"
+		packageMeta.currX = u.Package[shipId].DestX
+		packageMeta.currY = u.Package[shipId].DestY
 		u.updatePackageTable(packageMeta)
 	}
 
@@ -188,6 +192,8 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 // handle truck status queris
 func (u *UPS) HandleTruckStatus(truckStatuses []*pb.UTruck, connW net.Conn) {
 
+	u.PackageMutex.Lock()
+	defer u.PackageMutex.Unlock()
 	for _, truckStatus := range truckStatuses {
 		truckID := truckStatus.GetTruckid()
 		truckX := truckStatus.GetX()
@@ -195,12 +201,11 @@ func (u *UPS) HandleTruckStatus(truckStatuses []*pb.UTruck, connW net.Conn) {
 
 		u.PackageMutex.Lock()
 		for _, v := range u.Package {
-			if v.truckId == truckID && v.status == "out for delivery" {
+			if v.TruckId == truckID && v.Status == "out for delivery" {
 				v.currX = truckX
 				v.currY = truckY
 			}
 		}
-		u.PackageMutex.Unlock()
 	}
 
 	// Send World ACKS

@@ -8,13 +8,13 @@ import (
 func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
 	db := u.DB
 
-	packageID := packageMetaData.packageId
-	status := packageMetaData.status
+	packageID := packageMetaData.PackageId
+	status := packageMetaData.Status
 	currentX := packageMetaData.currX
 	currentY := packageMetaData.currY
 	username := packageMetaData.username
-	destinationX := packageMetaData.destX
-	destinationY := packageMetaData.destY
+	destinationX := packageMetaData.DestX
+	destinationY := packageMetaData.DestY
 
 	var query string
 	if username != "" {

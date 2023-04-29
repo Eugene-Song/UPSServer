@@ -11,15 +11,15 @@ import (
 
 type PackageMetaData struct {
 	// packageID or shipId
-	packageId int64
+	PackageId int64
 	// destination coordinate x
-	destX int32
+	DestX int32
 	// destination coordinate y
-	destY int32
+	DestY int32
 	// warehouse id
 	whID int32
 	// truck id
-	truckId int32
+	TruckId int32
 	// pickup coordinate x
 	pickupX int32
 	// pickup coordinate y
@@ -27,7 +27,7 @@ type PackageMetaData struct {
 	// username
 	username string
 	// Status
-	status string
+	Status string
 	// current X
 	currX int32
 	// current Y
@@ -63,6 +63,9 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 	u.TruckMutex.Unlock()
 	log.Printf("Find a truck %d", truckId)
 	// construct UCommands
+
+	u.PackageMutex.Lock()
+	defer u.PackageMutex.Unlock()
 	for _, pickUpRequest := range pickUpRequests {
 		seqNum := RandomInt64()
 		uGoPickup := &pb.UGoPickup{
@@ -77,31 +80,29 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 
 		// fill Package mapping
 		packageMeta := &PackageMetaData{
-			packageId:   pickUpRequest.GetShipId(),
-			destX:       pickUpRequest.GetDestinationX(),
-			destY:       pickUpRequest.GetDestinationY(),
+			PackageId:   pickUpRequest.GetShipId(),
+			DestX:       pickUpRequest.GetDestinationX(),
+			DestY:       pickUpRequest.GetDestinationY(),
 			whID:        pickUpRequest.GetWarehouseId(),
-			truckId:     truckId,
+			TruckId:     truckId,
 			pickupX:     pickUpRequest.GetX(),
 			pickupY:     pickUpRequest.GetY(),
 			username:    pickUpRequest.GetUpsName(),
-			status:      "truck en route to warehouse",
+			Status:      "truck en route to warehouse",
 			currX:       pickUpRequest.GetX(),
 			currY:       pickUpRequest.GetY(),
 			itemDetails: pickUpRequest.GetItems(),
 		}
-		u.PackageMutex.Lock()
 		u.Package[*pickUpRequest.ShipId] = packageMeta
-		u.PackageMutex.Unlock()
 
 		u.updatePackageTable(packageMeta)
 
 		u.MapTruckShipMutex.Lock()
 		shipIds, ok := u.MapTruckShip[truckId]
 		if ok {
-			shipIds = append(shipIds, packageMeta.packageId)
+			shipIds = append(shipIds, packageMeta.PackageId)
 		} else {
-			u.MapTruckShip[truckId] = []int64{packageMeta.packageId}
+			u.MapTruckShip[truckId] = []int64{packageMeta.PackageId}
 		}
 		u.MapTruckShipMutex.Unlock()
 	}
@@ -119,7 +120,7 @@ func (u *UPS) ConstructUCommandsDeliver(deliverRequests []*pb.AUDeliverRequest) 
 	var truckId int32
 	shipId := *deliverRequests[0].ShipId
 	packageMetaData := u.Package[shipId]
-	truckId = packageMetaData.truckId
+	truckId = packageMetaData.TruckId
 
 	// update truck status
 	u.TruckMutex.Lock()
@@ -141,13 +142,13 @@ func (u *UPS) ConstructUCommandsDeliver(deliverRequests []*pb.AUDeliverRequest) 
 
 		uDeliverLocation := &pb.UDeliveryLocation{
 			Packageid: &shipID,
-			X:         &packageData.destX,
-			Y:         &packageData.destY,
+			X:         &packageData.DestX,
+			Y:         &packageData.DestY,
 		}
 		uGoDeliver.Packages = append(uGoDeliver.Packages, uDeliverLocation)
 
 		// update package status
-		packageData.status = "out for delivery"
+		packageData.Status = "out for delivery"
 		u.updatePackageTable(packageData)
 	}
 	u.PackageMutex.Unlock()
@@ -229,11 +230,10 @@ func RandomInt64() int64 {
 
 func (u *UPS) updatePackLoadStatus(shipIds []int64) {
 	u.PackageMutex.Lock()
+	defer u.PackageMutex.Unlock()
 	for _, shipId := range shipIds {
 		packageMeta := u.Package[shipId]
-		packageMeta.status = "truck waiting for package"
+		packageMeta.Status = "truck waiting for package"
 		u.updatePackageTable(packageMeta)
 	}
-	u.PackageMutex.Unlock()
-
 }

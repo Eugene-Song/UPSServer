@@ -6,6 +6,7 @@ import (
 	"UPSServer/ups"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"io"
@@ -16,6 +17,16 @@ import (
 	"syscall"
 	"time"
 )
+
+type APIMessage struct {
+	ShipID     int
+	X          int
+	Y          int
+	Coordinate struct {
+		X int
+		Y int
+	}
+}
 
 func main() {
 	// connect to mysql db
@@ -43,18 +54,22 @@ func main() {
 	}
 
 	upsServer := &ups.UPS{
-		SimSpeed:       100,
-		Package:        make(map[int64]*ups.PackageMetaData),
-		UnAckedPickup:  make(map[int64]*pb.UGoPickup),
-		UnAckedDeliver: make(map[int64]*pb.UGoDeliver),
-		Truck:          trucks,
-		MapTruckShip:   make(map[int32][]int64),
-		DB:             db,
+		SimSpeed:           100,
+		Package:            make(map[int64]*ups.PackageMetaData),
+		UnAckedPickup:      make(map[int64]*pb.UGoPickup),
+		UnAckedDeliver:     make(map[int64]*pb.UGoDeliver),
+		UnAckedLoad:        make(map[int64]*pb.UALoadRequest),
+		UnAckedUADelivered: make(map[int64]*pb.UADelivered),
+		Truck:              trucks,
+		MapTruckShip:       make(map[int32][]int64),
+		DB:                 db,
+		AmazonSeqNum:       make(map[int64]bool),
 	}
 
 	go upsServer.LoopSendUnAcked(connW)
 	go recvAmazon(connA, connW, upsServer)
 	go recvWorld(connA, connW, upsServer)
+	go listenWebAPI(connW, upsServer)
 
 	// Create a goroutine to wait for the interrupt signal
 	go func() {
@@ -68,6 +83,7 @@ func main() {
 	}()
 
 	for true {
+		// loop send query truck
 		uCommands := &pb.UCommands{
 			Queries: []*pb.UQuery{},
 		}
@@ -200,6 +216,28 @@ func recvAmazon(connA net.Conn, connW net.Conn, u *ups.UPS) {
 	}
 }
 
+// Go Routine that listen on connection from Web API
+func listenWebAPI(connW net.Conn, u *ups.UPS) {
+	listener, err := net.Listen("tcp", ":8090")
+	if err != nil {
+		log.Println("Error starting WebAPI server:", err)
+		return
+	}
+	defer listener.Close()
+
+	log.Println("WebAPI Server started, listening Web API on :8090")
+
+	for {
+		connWeb, err := listener.Accept()
+		if err != nil {
+			log.Println("Error accepting connection from Web API:", err)
+			continue
+		}
+
+		go handleAPIConnection(connW, connWeb, u)
+	}
+}
+
 // used for init connection with simulation world
 func initConnectWorld(numTruck int32) (net.Conn, int64) {
 	// Construct the UConnect message
@@ -305,7 +343,7 @@ func prefixVarintLength(data []byte) []byte {
 
 // decode length and read data from connection
 func recvConn(conn net.Conn) ([]byte, error) {
-	// Read the length of the data as a varint
+	// Read the length of the data as a varient
 	var messageLen uint64
 	var bytesRead int
 	var buf [binary.MaxVarintLen64]byte
@@ -327,4 +365,80 @@ func recvConn(conn net.Conn) ([]byte, error) {
 	data := make([]byte, messageLen)
 	_, err := io.ReadFull(conn, data)
 	return data, err
+}
+
+// handle API connection
+func handleAPIConnection(connW net.Conn, connWeb net.Conn, u *ups.UPS) {
+	defer connWeb.Close()
+
+	// Read the length of the incoming message
+	messageLengthBuffer := make([]byte, 4)
+	_, err := connWeb.Read(messageLengthBuffer)
+	if err != nil {
+		log.Println("Error reading api message length:", err)
+		return
+	}
+
+	// Convert the length to an integer
+	messageLength := binary.BigEndian.Uint32(messageLengthBuffer)
+	log.Println("API Message length:", messageLength)
+
+	// Read the actual message data
+	messageBuffer := make([]byte, messageLength)
+	_, err = connWeb.Read(messageBuffer)
+	if err != nil {
+		log.Println("Error reading api message data:", err)
+		return
+	}
+
+	// Unmarshal the received JSON data into a Message struct
+	var apiMessage APIMessage
+	err = json.Unmarshal(messageBuffer, &apiMessage)
+	if err != nil {
+		log.Println("Error decoding API Message JSON:", err)
+		return
+	}
+
+	// Process the received message
+	log.Println("Successfully Received and Unmarshal the API message:", apiMessage)
+
+	// fetch the update info
+	shipID := apiMessage.ShipID
+	x := int32(apiMessage.X)
+	y := int32(apiMessage.Y)
+	u.PackageMutex.Lock()
+	defer u.PackageMutex.Unlock()
+	packageMeta := u.Package[int64(shipID)]
+
+	if packageMeta.Status != "out for delivery" || packageMeta.Status != "delivered" {
+		// if the package is not yet out for delivery or delivered, update delivery addr in meta data
+		packageMeta.DestX = x
+		packageMeta.DestY = y
+	} else if packageMeta.Status == "out for delivery" {
+		// if the package is out for delivery, construct UGoDeliver-UCommands and send
+		seqNum := ups.RandomInt64()
+		uDeliveryLocation := &pb.UDeliveryLocation{
+			Packageid: &packageMeta.PackageId,
+			X:         &x,
+			Y:         &y,
+		}
+		uGoDeliver := &pb.UGoDeliver{
+			Truckid:  &packageMeta.TruckId,
+			Packages: []*pb.UDeliveryLocation{uDeliveryLocation},
+			Seqnum:   &seqNum,
+		}
+		uCommands := &pb.UCommands{
+			Deliveries: []*pb.UGoDeliver{uGoDeliver},
+		}
+
+		// send updated UGoDeliver to world
+		marshaledUCommands, _ := proto.Marshal(uCommands)
+		connectBytes := prefixVarintLength(marshaledUCommands)
+
+		// Send the UConnect message
+		_, err := connW.Write(connectBytes)
+		if err != nil {
+			log.Fatalf("Failed to send Update Delivery message: %v", err)
+		}
+	}
 }

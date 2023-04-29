@@ -1,0 +1,100 @@
+# version: "3.9"
+
+# services:
+#   mysql:
+#     image: mysql:8.0
+#     environment:
+#       MYSQL_ROOT_PASSWORD: Wadqq3.23
+#       MYSQL_DATABASE: upsdb
+#       MYSQL_USER: root
+#       MYSQL_PASSWORD: Wadqq3.23
+#     volumes:
+#       - mysql-data:/var/lib/mysql
+#     ports:
+#       - "3306:3306"
+
+#   api:
+#     build: ./webapp/api
+#     ports:
+#       - "8089:8089"
+#     depends_on:
+#       - mysql
+#     environment:
+#       MYSQL_HOST: mysql
+#       MYSQL_USER: root
+#       MYSQL_PASSWORD: Wadqq3.23
+#       MYSQL_DATABASE: upsdb
+#   ui:
+#     build: ./webapp/ui
+#     ports:
+#       - "3000:3000"
+#     depends_on:
+#       - api
+#   ups:
+#     build: ./src/ups
+#     ports:
+#       - "8090:8090"
+#     depends_on:
+#       - mysql
+#     environment:
+#       MYSQL_HOST: mysql
+#       MYSQL_USER: root
+#       MYSQL_PASSWORD: Wadqq3.23
+#       MYSQL_DATABASE: upsdb
+
+# volumes:
+#   mysql-data:
+
+
+
+
+
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: Wadqq3.23
+      MYSQL_DATABASE: upsdb
+      MYSQL_USER: root
+      MYSQL_PASSWORD: Wadqq3.23
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  api:
+    build: ./webapp/api
+    ports:
+      - "8089:8089"
+    depends_on:
+      - mysql
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: Wadqq3.23
+      MYSQL_DATABASE: upsdb
+    entrypoint: ["sh", "-c", "node setupdb.js && npm start"]
+
+  ui:
+    build: ./webapp/ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  ups:
+    build: ./src
+    ports:
+      - "8090:8090"
+    depends_on:
+      - mysql
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: Wadqq3.23
+      MYSQL_DATABASE: upsdb
+
+volumes:
+  mysql-data:

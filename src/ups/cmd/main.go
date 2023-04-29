@@ -301,7 +301,7 @@ func initAmazon(worldId int64) net.Conn {
 
 	// Connect to the server
 	// TODO: change to Amazon server
-	connA, err := net.Dial("tcp", "10.197.73.115:8080")
+	connA, err := net.Dial("tcp", "172.20.1.5:8080")
 	if err != nil {
 		log.Printf("Failed to connect to Amazon: %v", err)
 	}

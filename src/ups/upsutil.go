@@ -96,7 +96,7 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 		}
 		u.Package[*pickUpRequest.ShipId] = packageMeta
 
-		u.updatePackageTable(packageMeta)
+		u.UpdatePackageTable(packageMeta)
 		log.Printf("Successfully update package table in ConstructUCommandsPick.")
 
 		u.MapTruckShipMutex.Lock()
@@ -151,7 +151,7 @@ func (u *UPS) ConstructUCommandsDeliver(deliverRequests []*pb.AUDeliverRequest) 
 
 		// update package status
 		packageData.Status = "out for delivery"
-		u.updatePackageTable(packageData)
+		u.UpdatePackageTable(packageData)
 	}
 	u.PackageMutex.Unlock()
 
@@ -235,7 +235,7 @@ func (u *UPS) updatePackLoadStatus(shipIds []int64) {
 	for _, shipId := range shipIds {
 		packageMeta := u.Package[shipId]
 		packageMeta.Status = "truck waiting for package"
-		u.updatePackageTable(packageMeta)
+		u.UpdatePackageTable(packageMeta)
 	}
 	u.PackageMutex.Unlock()
 

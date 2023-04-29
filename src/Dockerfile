@@ -15,12 +15,12 @@ RUN go mod tidy
 
 RUN cd ./ups/cmd
 
-RUN go build -o main .
+# RUN go build -o main .
 ## Expose the port that the application will run on
-#EXPOSE 8080
+EXPOSE 8090
 
 # Run the compiled binary
-CMD ["go run main.go"]
+CMD ["go",  "run", "./ups/cmd/main.go"]
 
 
 

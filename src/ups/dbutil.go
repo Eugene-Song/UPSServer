@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-func (u *UPS) updatePackageTable(packageMetaData *PackageMetaData) {
+func (u *UPS) UpdatePackageTable(packageMetaData *PackageMetaData) {
 	db := u.DB
 
 	packageID := packageMetaData.PackageId

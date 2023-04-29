@@ -19,13 +19,9 @@ import (
 )
 
 type APIMessage struct {
-	ShipID     int
-	X          int
-	Y          int
-	Coordinate struct {
-		X int
-		Y int
-	}
+	ShipID int
+	X      int
+	Y      int
 }
 
 func main() {
@@ -66,11 +62,6 @@ func main() {
 		AmazonSeqNum:       make(map[int64]bool),
 	}
 
-	go upsServer.LoopSendUnAcked(connW)
-	go recvAmazon(connA, connW, upsServer)
-	go recvWorld(connA, connW, upsServer)
-	go listenWebAPI(connW, upsServer)
-
 	// Create a goroutine to wait for the interrupt signal
 	go func() {
 		<-signalChannel // Block until an interrupt signal is received
@@ -81,6 +72,10 @@ func main() {
 		// Exit the program with a success status code (0)
 		os.Exit(0)
 	}()
+	go upsServer.LoopSendUnAcked(connW)
+	go recvAmazon(connA, connW, upsServer)
+	go recvWorld(connA, connW, upsServer)
+	go listenWebAPI(connW, upsServer)
 
 	for true {
 		// loop send query truck
@@ -108,6 +103,7 @@ func main() {
 		}
 		time.Sleep(2 * time.Second)
 	}
+
 }
 
 func recvWorld(connA net.Conn, connW net.Conn, u *ups.UPS) {
@@ -414,31 +410,27 @@ func handleAPIConnection(connW net.Conn, connWeb net.Conn, u *ups.UPS) {
 		// if the package is not yet out for delivery or delivered, update delivery addr in meta data
 		packageMeta.DestX = x
 		packageMeta.DestY = y
-	} else if packageMeta.Status == "out for delivery" {
-		// if the package is out for delivery, construct UGoDeliver-UCommands and send
-		seqNum := ups.RandomInt64()
-		uDeliveryLocation := &pb.UDeliveryLocation{
-			Packageid: &packageMeta.PackageId,
-			X:         &x,
-			Y:         &y,
-		}
-		uGoDeliver := &pb.UGoDeliver{
-			Truckid:  &packageMeta.TruckId,
-			Packages: []*pb.UDeliveryLocation{uDeliveryLocation},
-			Seqnum:   &seqNum,
-		}
-		uCommands := &pb.UCommands{
-			Deliveries: []*pb.UGoDeliver{uGoDeliver},
-		}
-
-		// send updated UGoDeliver to world
-		marshaledUCommands, _ := proto.Marshal(uCommands)
-		connectBytes := prefixVarintLength(marshaledUCommands)
-
-		// Send the UConnect message
-		_, err := connW.Write(connectBytes)
+		u.UpdatePackageTable(packageMeta)
+		// tell the client update success
+		// Send data
+		message := "Success"
+		_, err = connWeb.Write([]byte(message))
 		if err != nil {
-			log.Fatalf("Failed to send Update Delivery message: %v", err)
+			fmt.Println("Error sending update response:", err)
+			os.Exit(1)
 		}
+
+		log.Println("Success Update Message sent:", message)
+	} else {
+		// tell the client the package is already out for delivery, so fail to update
+		// Send data
+		message := "Fail"
+		_, err = connWeb.Write([]byte(message))
+		if err != nil {
+			fmt.Println("Error sending update response:", err)
+			os.Exit(1)
+		}
+
+		log.Println("Fail Update Response sent:", message)
 	}
 }

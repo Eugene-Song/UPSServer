@@ -6,7 +6,7 @@ import { AuthContext } from "../context/authContext";
 import { useContext } from "react";
 
 const Index = () => {
-    const [inputs, setInputs] = useState({
+      const [inputs, setInputs] = useState({
         trackID: "",
       });
       const [err, setError] = useState(null);

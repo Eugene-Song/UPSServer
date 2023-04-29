@@ -167,7 +167,7 @@ func (u *UPS) HandleUDeliverMade(uDeliverMadeResponses []*pb.UDeliveryMade, conn
 		packageMeta.Status = "delivered"
 		packageMeta.currX = u.Package[shipId].DestX
 		packageMeta.currY = u.Package[shipId].DestY
-		u.updatePackageTable(packageMeta)
+		u.UpdatePackageTable(packageMeta)
 	}
 
 	// send delivered to Amazon

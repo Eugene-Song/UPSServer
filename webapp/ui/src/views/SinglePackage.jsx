@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Icon } from 'leaflet';
 import Logo from "../img/marker.png";
 import HomeLogo from "../img/home.png"
+import { useContext } from "react";
+import { AuthContext } from "../context/authContext";
 
 const customIcon1 = new Icon({
   iconUrl: Logo,
@@ -27,6 +29,12 @@ const SinglePackage = () => {
   const [home, setHome] = useState([0, 0]);
   const { id } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useContext(AuthContext);
+  const [inputs, setInputs] = useState({
+    X: 0,
+    Y: 0,
+  });
+  const [err, setError] = useState(null);
   
 
   const fetchPackageDetails = async () => {
@@ -58,6 +66,19 @@ const SinglePackage = () => {
       return () => clearInterval(interval);
   }, []);
 
+  const handleChange = (e) => {
+    setInputs((prev) => ({ ...prev, [e.target.name]: parseInt(e.target.value, 10) }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.put(`/package/${packageDetails.shipID}`, inputs);
+    } catch (err) {
+      setError(err.response.data);
+    }
+  };
+
   return (
     <div>
       <div>
@@ -66,7 +87,31 @@ const SinglePackage = () => {
             <h1>Package Details</h1>
             <p>Track ID: {packageDetails.packageID}</p>
             <p>Status: {packageDetails.status}</p>
+            {packageDetails.username && currentUser.username === packageDetails.username && (
+            <div className="edit">
+              <h1>Change your delivery address here!</h1>
+              <form>
+                <input
+                  required
+                  type="number"
+                  placeholder="New address x"
+                  name="X"
+                  onChange={handleChange}
+                />
+                <input
+                  required
+                  type="number"
+                  placeholder="New address y"
+                  name="Y"
+                  onChange={handleChange}
+                />
+                <button onClick={handleSubmit}>Update your address</button>
+                {err && <p>{err}</p>}
+              </form>
+            </div>
+            )}
           </div>
+          
         ) : (
           <p className="loading">Loading package details...</p>
         )}

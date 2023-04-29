@@ -44,7 +44,8 @@ type UPS struct {
 	DB *sql.DB
 
 	// keep all seqNum for Amazon AUCommand
-	AmazonSeqNum map[int64]bool
+	MapAmazonSeqNumMutex sync.Mutex
+	AmazonSeqNum         map[int64]bool
 }
 
 func (u *UPS) HandlePickupRequest(pickUpRequests []*pb.AUPickupRequest, connW net.Conn, connA net.Conn) {
@@ -109,14 +110,16 @@ func (u *UPS) HandleUFinished(uFinishedResponses []*pb.UFinished, connA net.Conn
 	for _, uFinishedResponse := range uFinishedResponses {
 		truckId := *uFinishedResponse.Truckid
 		// If the truck has finished all the deliveries and idle
-		if *uFinishedResponse.Status == "idle" {
-			log.Printf("Truck complete all deliveries: %v", truckId)
+		log.Printf("Truck statusfeesiofhesioifesiohfhesihfiueshuifhesiufhiesuhuifheshuifeshuifhiueshfieshiufheuishfiueshfieshiufheishfiuehifuhesiuhfiueshfieushfiueshiuf: %v", uFinishedResponse.GetStatus())
+		if uFinishedResponse.GetStatus() == "IDLE" {
+			log.Printf("Truck complete all deliveriesjfoiesjfojesijfoeisjfoiesjfoiesjfoiesjfoiesfoihesofheosihfoieshffjosie: %v", truckId)
 			u.Truck[truckId] = "idle"
 			continue
 		}
 
 		// if the truck has associated packages on it
 		if len(u.MapTruckShip[truckId]) != 0 {
+			log.Printf("The truck has associated packages on it and prepare to send load request toamazon")
 			shipIds = u.MapTruckShip[truckId]
 			u.MapTruckShip[truckId] = []int64{}
 			u.Truck[truckId] = "arrive warehouse"
@@ -203,6 +206,7 @@ func (u *UPS) HandleTruckStatus(truckStatuses []*pb.UTruck, connW net.Conn) {
 			if v.TruckId == truckID && v.Status == "out for delivery" {
 				v.currX = truckX
 				v.currY = truckY
+				u.UpdatePackageTable(v)
 			}
 		}
 	}
@@ -229,9 +233,23 @@ func (u *UPS) DeleteAckedCommand(acks []int64) {
 	}
 }
 
+// function to delete acked command
+func (u *UPS) DeleteAmazonAckedCommand(acks []int64) {
+	for _, ack := range acks {
+		_, keyExists := u.UnAckedLoad[ack]
+		if keyExists {
+			delete(u.UnAckedLoad, ack)
+		}
+		_, keyExists = u.UnAckedUADelivered[ack]
+		if keyExists {
+			delete(u.UnAckedUADelivered, ack)
+		}
+	}
+}
+
 func (u *UPS) LoopSendUnAcked(connW net.Conn) {
 	for true {
-		log.Printf("One loop start send unacked!!!")
+		//log.Printf("One loop start send World unacked!!!")
 		ucommands := &pb.UCommands{
 			Pickups:    []*pb.UGoPickup{},
 			Deliveries: []*pb.UGoDeliver{},
@@ -253,8 +271,36 @@ func (u *UPS) LoopSendUnAcked(connW net.Conn) {
 				log.Fatalf("Failed to send UConnect message: %v", err)
 			}
 		}
-		log.Printf("send unacked, enter next loop!!!")
 		time.Sleep(time.Millisecond * 100)
 	}
 	defer connW.Close()
+}
+
+func (u *UPS) LoopSendAmazonUnAcked(connA net.Conn) {
+	for true {
+		log.Printf("One loop start send Amazon unacked!!!")
+		uaCommands := &pb.UACommand{
+			LoadRequests: []*pb.UALoadRequest{},
+			Delivered:    []*pb.UADelivered{},
+		}
+		for _, v := range u.UnAckedLoad {
+			uaCommands.LoadRequests = append(uaCommands.LoadRequests, v)
+		}
+		for _, v := range u.UnAckedUADelivered {
+			uaCommands.Delivered = append(uaCommands.Delivered, v)
+		}
+		if len(uaCommands.LoadRequests) != 0 || len(uaCommands.Delivered) != 0 {
+			marshaledUACommands, _ := proto.Marshal(uaCommands)
+			connectBytes := prefixVarintLength(marshaledUACommands)
+
+			// Send the UConnect message
+			_, err := connA.Write(connectBytes)
+			if err != nil {
+				log.Fatalf("Failed to send UnAcked-UACommand message: %v", err)
+			}
+		}
+		log.Printf("send Amazon unacked, enter next loop!!!")
+		time.Sleep(5 * time.Second)
+	}
+	defer connA.Close()
 }

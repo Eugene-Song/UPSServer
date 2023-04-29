@@ -7,6 +7,7 @@ import (
 )
 
 func (u *UPS) UpdatePackageTable(packageMetaData *PackageMetaData) {
+	log.Printf("Enter UpdatePackageTable function")
 	db := u.DB
 
 	packageID := packageMetaData.PackageId

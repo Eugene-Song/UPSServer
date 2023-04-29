@@ -14,14 +14,15 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
 
 type APIMessage struct {
-	ShipID int
-	X      int
-	Y      int
+	ShipID string
+	X      string
+	Y      string
 }
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 	signal.Notify(signalChannel, syscall.SIGINT)
 
 	// connect to World
-	numTruck := int32(50)
+	numTruck := int32(5)
 	connW, worldID := initConnectWorld(numTruck)
 	log.Printf("UPS successfully connect to worldId: %v", worldID)
 	// connect to Amazon, send worldId
@@ -50,7 +51,7 @@ func main() {
 	}
 
 	upsServer := &ups.UPS{
-		SimSpeed:           50,
+		SimSpeed:           100,
 		Package:            make(map[int64]*ups.PackageMetaData),
 		UnAckedPickup:      make(map[int64]*pb.UGoPickup),
 		UnAckedDeliver:     make(map[int64]*pb.UGoDeliver),
@@ -73,6 +74,7 @@ func main() {
 		os.Exit(0)
 	}()
 	go upsServer.LoopSendUnAcked(connW)
+	go upsServer.LoopSendAmazonUnAcked(connA)
 	go recvAmazon(connA, connW, upsServer)
 	go recvWorld(connA, connW, upsServer)
 	go listenWebAPI(connW, upsServer)
@@ -95,13 +97,13 @@ func main() {
 		marshaledUCommands, _ := proto.Marshal(uCommands)
 		connectBytes := prefixVarintLength(marshaledUCommands)
 
-		log.Printf("For Loop Send UCommand Query Truck to World")
+		//log.Printf("For Loop Send UCommand Query Truck to World")
 		// Send the UConnect message
 		_, err := connW.Write(connectBytes)
 		if err != nil {
 			log.Printf("Failed to send UCommand Query Truck to World: %v", err)
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(time.Millisecond * 100)
 	}
 
 }
@@ -171,12 +173,18 @@ func recvAmazon(connA net.Conn, connW net.Conn, u *ups.UPS) {
 		}
 		log.Printf("recvAmazon function, just recv auCommand from Amazon: %v", auCommand)
 
+		toDeleteAcks := auCommand.Acks
+		if toDeleteAcks != nil {
+			u.DeleteAmazonAckedCommand(toDeleteAcks)
+		}
+
 		acks := []int64{}
 		// 1. error field
 		//errs := auCommand.Error
 
 		// 2. handle pickup request
 		pickups := auCommand.PickupRequests
+		toHandlePickups := []*pb.AUPickupRequest{}
 		if pickups != nil {
 			for _, pickup := range pickups {
 				seqNum := pickup.GetSeqNum()
@@ -185,14 +193,22 @@ func recvAmazon(connA net.Conn, connW net.Conn, u *ups.UPS) {
 					// seqNum already exist, send it back to amazon
 					// while send request to world
 					acks = append(acks, seqNum)
+				} else {
+					seqNum := pickup.GetSeqNum()
+					u.MapAmazonSeqNumMutex.Lock()
+					u.AmazonSeqNum[seqNum] = true
+					u.MapAmazonSeqNumMutex.Unlock()
+					toHandlePickups = append(toHandlePickups, pickup)
 				}
 			}
-
-			u.HandlePickupRequest(pickups, connW, connA)
+			if len(toHandlePickups) > 0 {
+				go u.HandlePickupRequest(toHandlePickups, connW, connA)
+			}
 		}
 
 		// 3. handle delivery request
 		deliveries := auCommand.DeliverRequests
+		toHandleDeliveries := []*pb.AUDeliverRequest{}
 		if deliveries != nil {
 			for _, delivery := range deliveries {
 				seqNum := delivery.GetSeqNum()
@@ -201,9 +217,18 @@ func recvAmazon(connA net.Conn, connW net.Conn, u *ups.UPS) {
 					// seqNum already exist, send it back to amazon
 					// while send request to world
 					acks = append(acks, seqNum)
+				} else {
+					seqNum := delivery.GetSeqNum()
+					u.MapAmazonSeqNumMutex.Lock()
+					u.AmazonSeqNum[seqNum] = true
+					u.MapAmazonSeqNumMutex.Unlock()
+					toHandleDeliveries = append(toHandleDeliveries, delivery)
 				}
 			}
-			u.HandleDeliverRequest(deliveries, connW, connA)
+
+			if len(toHandleDeliveries) > 0 {
+				u.HandleDeliverRequest(deliveries, connW, connA)
+			}
 		}
 
 		if len(acks) > 0 {
@@ -297,7 +322,7 @@ func initAmazon(worldId int64) net.Conn {
 
 	// Connect to the server
 	// TODO: change to Amazon server
-	connA, err := net.Dial("tcp", "vcm-32290.vm.duke.edu:54321")
+	connA, err := net.Dial("tcp", "10.197.73.115:8080")
 	if err != nil {
 		log.Printf("Failed to connect to Amazon: %v", err)
 	}
@@ -365,7 +390,6 @@ func recvConn(conn net.Conn) ([]byte, error) {
 
 // handle API connection
 func handleAPIConnection(connW net.Conn, connWeb net.Conn, u *ups.UPS) {
-	defer connWeb.Close()
 
 	// Read the length of the incoming message
 	messageLengthBuffer := make([]byte, 4)
@@ -399,9 +423,13 @@ func handleAPIConnection(connW net.Conn, connWeb net.Conn, u *ups.UPS) {
 	log.Println("Successfully Received and Unmarshal the API message:", apiMessage)
 
 	// fetch the update info
-	shipID := apiMessage.ShipID
-	x := int32(apiMessage.X)
-	y := int32(apiMessage.Y)
+	shipID, _ := strconv.ParseInt(apiMessage.ShipID, 10, 64)
+	tempx, _ := strconv.ParseInt(apiMessage.X, 10, 32)
+	x := int32(tempx)
+	tempy, _ := strconv.ParseInt(apiMessage.Y, 10, 32)
+	y := int32(tempy)
+	log.Printf("shipID: %d, x: %d, y: %d", shipID, x, y)
+
 	u.PackageMutex.Lock()
 	defer u.PackageMutex.Unlock()
 	packageMeta := u.Package[int64(shipID)]

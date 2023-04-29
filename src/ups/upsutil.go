@@ -50,17 +50,26 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 		Simspeed: &u.SimSpeed,
 	}
 	var truckId int32
+	exitLoop := false
 
-	u.TruckMutex.Lock()
-	for k, v := range u.Truck {
-		if v == "idle" || v == "arrive warehouse" || v == "delivering" {
-			//find a truck
-			u.Truck[k] = "traveling"
-			truckId = k
+	for true {
+		for k, v := range u.Truck {
+			u.TruckMutex.Lock()
+			if v == "idle" {
+				//find a truck
+				u.Truck[k] = "traveling"
+				truckId = k
+				exitLoop = true
+				u.TruckMutex.Unlock()
+				break
+			}
+			u.TruckMutex.Unlock()
+		}
+		if exitLoop {
 			break
 		}
 	}
-	u.TruckMutex.Unlock()
+
 	log.Printf("Find a truck %d", truckId)
 	// construct UCommands
 
@@ -103,6 +112,7 @@ func (u *UPS) ConstructUCommandsPick(pickUpRequests []*pb.AUPickupRequest) *pb.U
 		shipIds, ok := u.MapTruckShip[truckId]
 		if ok {
 			shipIds = append(shipIds, packageMeta.PackageId)
+			u.MapTruckShip[truckId] = shipIds
 		} else {
 			u.MapTruckShip[truckId] = []int64{packageMeta.PackageId}
 		}

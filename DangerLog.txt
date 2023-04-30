@@ -1,0 +1,14 @@
+Danger Log:
+
+
+
+Potential Danger:
+
+1. Due the the blackbox nature of the World, we find it hard to know exactly what would happen if we send multiple pickup request with different warehosue id.
+We find that there might be undefined behavior if the same truck is receiving multiple pickup request with different warehouse id continually. 
+We are not clearly about what happens if the truck receives other pickup requests while it is traveling to warehouse.
+
+2. In the proto message UResponses, the error filed. We find it hard to know what are errors message that the World might send to UPS. Therefore, it is extremely hard for us to implement error handling without explictly know the error case that the World might have.
+
+
+3. We think there might be potential issue if there are 

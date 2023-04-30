@@ -38,6 +38,7 @@ CREATE TABLE package (
   destinationX INT,
   destinationY INT,
   username VARCHAR(255),
+  item VARCHAR(255),
   date DATETIME NOT NULL,
   FOREIGN KEY (username) REFERENCES users(username)
 );

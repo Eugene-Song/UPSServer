@@ -3,13 +3,12 @@ import jwt from 'jsonwebtoken';
 import net from 'net';
 import bodyParser from 'body-parser';
 import cors from 'cors';
-import nodemailer from 'nodemailer';
 
 export const allPakcages = (req, res) => {
-    const token = req.cookies.jwttoken;
+    const token = req.cookies.access_token;
     if (!token) return res.status(401).json("No authenticated user");
 
-    jwt.verify(token, "secretkey", (err, userInfo) => {
+    jwt.verify(token, "jwtkey", (err, userInfo) => {
         if (err) return res.status(403).json("JWT token is not valid");
 
         // Replace this query with the actual query for your database
@@ -38,10 +37,10 @@ export const detailPackage = (req, res) => {
 }
 
 export const updateAddress = (req, res) => { 
-  const token = req.cookies.jwttoken;
+  const token = req.cookies.access_token;
   if (!token) return res.status(401).json("Not authenticated!");
 
-  jwt.verify(token, "secretkey", (err, userInfo) => {
+  jwt.verify(token, "jwtkey", (err, userInfo) => {
     if (err) return res.status(403).json("Token is not valid!");
 
     const shipID = req.params.id;
@@ -55,18 +54,6 @@ export const updateAddress = (req, res) => {
       Y: req.body.Y,
     };
 
-
-    const to = userInfo.email;
-    const subject = 'Your Update Address Result!';
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'upsserver568@gmail.com',
-        pass: 'Abc13579!',
-      },
-    });
-
-    
 
     client.connect(8090, 'localhost', () => {
       const messageString = JSON.stringify(message);
@@ -85,12 +72,6 @@ export const updateAddress = (req, res) => {
       const message = data.toString();
       console.log('Received message:', message);
       // End the connection after receiving the data
-      const info = await transporter.sendMail({
-        from: 'your-email@gmail.com',
-        to,
-        subject,
-        message,
-      });
   
       client.end();
       return res.status(200).json(message)

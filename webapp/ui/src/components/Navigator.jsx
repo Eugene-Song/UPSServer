@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 import { AuthContext } from "../context/authContext";
 import Logo from "../img/ups.png";
 
-const Navbar = () => {
+const Navigator = () => {
     const { currentUser, logout } = useContext(AuthContext);
 
     return (
-        <div className="navbar">
+        <div className="navigator">
             <div className="container">
                 <div className="logo">
                     <Link to="/">
@@ -29,4 +29,4 @@ const Navbar = () => {
     );
 };
 
-export default Navbar;
+export default Navigator;

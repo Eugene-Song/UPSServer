@@ -38,7 +38,8 @@ const Index = () => {
       };
     
       return (
-        <div className="auth">
+        <div className="index">
+          <h1>Welcome to our UPS server!</h1>
           <h1>Track you package here!</h1>
           <form>
             <input

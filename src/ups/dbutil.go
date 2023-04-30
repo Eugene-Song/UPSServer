@@ -17,38 +17,41 @@ func (u *UPS) UpdatePackageTable(packageMetaData *PackageMetaData) {
 	username := packageMetaData.username
 	destinationX := packageMetaData.DestX
 	destinationY := packageMetaData.DestY
+	item := packageMetaData.itemDetails
 
 	var query string
 	if username != "" {
 		query = `
-		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date)
-		VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) AS new_values
+		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date, item)
+		VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?) AS new_values
 		ON DUPLICATE KEY UPDATE
 			status = new_values.status,
 			currentX = new_values.currentX,
 			currentY = new_values.currentY,
 			destinationX = new_values.destinationX,
 			destinationY = new_values.destinationY,
-			username = new_values.username;
+			username = new_values.username,
+			item = new_values.item;
 	`
 	} else {
 		query = `
-		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date)
-		VALUES (?, ?, ?, ?, ?, ?, NULL, NOW()) AS new_values
+		INSERT INTO package (packageID, status, currentX, currentY, destinationX, destinationY, username, date, item)
+		VALUES (?, ?, ?, ?, ?, ?, NULL, NOW(), ?) AS new_values
 		ON DUPLICATE KEY UPDATE
 			status = new_values.status,
 			currentX = new_values.currentX,
 			currentY = new_values.currentY,
 			destinationX = new_values.destinationX,
-			destinationY = new_values.destinationY;
+			destinationY = new_values.destinationY,
+		    item = new_values.item;
 	`
 	}
 	var result sql.Result
 	var err error
 	if username != "" {
-		result, err = db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username)
+		result, err = db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, username, item)
 	} else {
-		result, err = db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY)
+		result, err = db.Exec(query, packageID, status, currentX, currentY, destinationX, destinationY, item)
 	}
 
 	if err != nil {

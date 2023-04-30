@@ -5,26 +5,22 @@ import bcrypt from "bcryptjs";
 export const login = (req, res) => {
     const q = "SELECT * FROM users WHERE username = ?";
 
-
     db.query(q, [req.body.username], (err, data) => {
-        // if query error, return 500
         if (err) return res.status(500).json(err);
-        // if user does not exist, return 404
         if (data.length === 0) return res.status(404).json("User not exists!");
-        // compare the input password
+
+        // Verify the password using bcrypt
         const isPasswordCorrect = bcrypt.compareSync(
         req.body.password,
         data[0].password
         );
-        if (!isPasswordCorrect) {
-            // if the password is not correct, return 400
-            return res.status(400).json("Wrong password / username!!!");
-        }
-        const token = jwt.sign({ id: data[0].id, username: data[0].username, email: data[0].email }, "secretkey");
+        if (!isPasswordCorrect)
+        return res.status(400).json("Wrong username or password!");
+        const token = jwt.sign({ id: data[0].id, username: data[0].username }, "jwtkey");
         const { password, ...other } = data[0];
 
         res
-        .cookie("jwttoken", token, {
+        .cookie("access_token", token, {
             httpOnly: true,
         })
         .status(200)
@@ -39,7 +35,7 @@ export const register = (req, res) => {
       if (err) return res.status(500).json(err);
       if (data.length) return res.status(409).json("User already exists!");
   
-      //Hash the password, add salt, and create a user
+      //Using bcrypt to hash the password and generate salt value
       const salt = bcrypt.genSaltSync(10);
       const hash = bcrypt.hashSync(req.body.password, salt);
 
@@ -54,7 +50,7 @@ export const register = (req, res) => {
 }
 
 export const logout = (req, res) => {
-    res.clearCookie("jwttoken",{
+    res.clearCookie("access_token",{
     sameSite:"none",
     secure:true
 }).status(200).json("User is logged out.");

@@ -1,21 +1,18 @@
 import React from "react";
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import axios from "axios";
 
 const Register = () => {
   const [inputs, setInputs] = useState({
     username: "",
+    name: "",
     email: "",
     password: "",
   });
-  const [err, setError] = useState(null);
 
   const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setInputs((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
+  const [err, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,8 +24,12 @@ const Register = () => {
     }
   };
 
+  const handleChange = (e) => {
+    setInputs((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
   return (
-    <div className="auth">
+    <div className="authenticate">
       <h1>Register</h1>
       <form>
         <input
@@ -36,6 +37,13 @@ const Register = () => {
           type="text"
           placeholder="username"
           name="username"
+          onChange={handleChange}
+        />
+        <input
+          required
+          type="name"
+          placeholder="name"
+          name="name"
           onChange={handleChange}
         />
         <input
@@ -55,7 +63,7 @@ const Register = () => {
         <button onClick={handleSubmit}>Register</button>
         {err && <p>{err}</p>}
         <span>
-          Do you have an account? <Link to="/login">Login</Link>
+          Do you already have an account? Login here! <Link to="/login">Login</Link>
         </span>
       </form>
     </div>

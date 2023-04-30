@@ -111,6 +111,7 @@ const SinglePackage = () => {
             <h1>Package Details</h1>
             <p>Track ID: {packageDetails.packageID}</p>
             <p>Status: {packageDetails.status}</p>
+            <p>Item Details: {packageDetails.item}</p>
             {packageDetails.username && currentUser.username === packageDetails.username && (
               <div className="edit">
                 <h1>Change your delivery address here!</h1>

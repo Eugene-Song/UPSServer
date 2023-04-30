@@ -38,7 +38,7 @@ func main() {
 	signal.Notify(signalChannel, syscall.SIGINT)
 
 	// connect to World
-	numTruck := int32(5)
+	numTruck := int32(1)
 	connW, worldID := initConnectWorld(numTruck)
 	log.Printf("UPS successfully connect to worldId: %v", worldID)
 	// connect to Amazon, send worldId
@@ -322,7 +322,7 @@ func initAmazon(worldId int64) net.Conn {
 
 	// Connect to the server
 	// TODO: change to Amazon server
-	connA, err := net.Dial("tcp", "10.197.73.115:8080")
+	connA, err := net.Dial("tcp", "vcm-32290.vm.duke.edu:54321")
 	if err != nil {
 		log.Printf("Failed to connect to Amazon: %v", err)
 	}
@@ -433,6 +433,13 @@ func handleAPIConnection(connW net.Conn, connWeb net.Conn, u *ups.UPS) {
 	u.PackageMutex.Lock()
 	defer u.PackageMutex.Unlock()
 	packageMeta := u.Package[int64(shipID)]
+	//packageMeta = &ups.PackageMetaData{
+	//	PackageId: 2,
+	//	DestX:     30,
+	//	DestY:     30,
+	//	TruckId:   1,
+	//	Status:    "eee",
+	//}
 
 	if packageMeta.Status != "out for delivery" || packageMeta.Status != "delivered" {
 		// if the package is not yet out for delivery or delivered, update delivery addr in meta data

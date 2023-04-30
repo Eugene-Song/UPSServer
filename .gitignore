@@ -5,3 +5,8 @@
 *.ali
 
 .idea
+
+node_modules
+
+log.txt
+
